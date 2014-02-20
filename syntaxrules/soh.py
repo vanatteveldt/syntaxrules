@@ -1,7 +1,7 @@
 import requests
 import logging
 import csv
-from rdflib.Graph import Graph
+from rdflib import Graph
 from StringIO import StringIO
 
 log = logging.getLogger(__name__)

@@ -28,11 +28,15 @@ import logging
 from unidecode import unidecode
 from rdflib import ConjunctiveGraph, Namespace, Literal
 
+from pygraphviz import AGraph
+
 log = logging.getLogger(__name__)
 
 AMCAT = "http://amcat.vu.nl/amcat3/"
 NS_AMCAT = Namespace(AMCAT)
-VIS_IGNORE_PROPERTIES = "position", "label"
+VIS_IGNORE_PROPERTIES = "id", "offset", "sentence", "uri", "word"
+VIS_GREY_REL = lambda triple: ({'color': 'grey'}
+                               if 'rel_' in triple.predicate else {})
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 Triple = namedtuple("Triple", ["subject", "predicate", "object"])
 
@@ -55,7 +59,6 @@ class SyntaxTree(object):
     def __init__(self, soh):
         """
         @param soh: a SOH server (see amcat.tools.pysoh)
-        @param rdf_triples: optional set of triples to load (see load_sentence)
         """
         self.soh = soh
         self.soh.prefixes[""] = AMCAT
@@ -80,25 +83,27 @@ class SyntaxTree(object):
 
     def get_triples(self, ignore_rel=True, filter_predicate=None):
         """Retrieve the triples for the loaded sentence"""
+        result = []
         if isinstance(filter_predicate, (str, unicode)):
             filter_predicate = [filter_predicate]
         nodes = {}
         for s, p, o in self.soh.get_triples():
-            child = nodes.setdefault(s, Node())
+            s = unicode(s)
+            child = nodes.setdefault(s, Node(uri=s))
+
             pred = str(p).replace(AMCAT, "")
             if isinstance(o, Literal):
                 if hasattr(child, pred):
                     o = getattr(child, pred) + "; " + o
                 setattr(child, pred, unicode(o))
             else:
+                o = unicode(o)
                 if not ((ignore_rel and pred == "rel")
                         or (filter_predicate and pred not in filter_predicate)
                         or (pred == RDF_TYPE)):
-                    parent = nodes.setdefault(o, Node())
-                    yield Triple(child, pred, parent)
-
-    def visualise(self, **kargs):
-        return visualise_triples(list(self.get_triples()), **kargs)
+                    parent = nodes.setdefault(o, Node(uri=o))
+                    result.append(Triple(child, pred, parent))
+        return result
 
     def apply_ruleset(self, ruleset):
         """
@@ -121,7 +126,8 @@ class SyntaxTree(object):
     def get_tokens(self):
         tokens = defaultdict(dict)  # id : {attrs}
         for s, p, o in self.soh.get_triples():
-            tokens[s][p.replace(NS_AMCAT, "")] = o
+            if isinstance(o, Literal):
+                tokens[s][p.replace(NS_AMCAT, "")] = unicode(o)
         return tokens
 
     def apply_lexicon(self, lexicon):
@@ -147,6 +153,40 @@ class SyntaxTree(object):
                                   .format(**locals()))
                         self.soh.update(insert=insert)
 
+    def get_graphviz(self, triple_args_function=None,
+                     ignore_properties=VIS_IGNORE_PROPERTIES):
+        """
+        Create a pygraphviz graph from the tree
+        """
+        def _id(node):
+            return node.uri.split("/")[-1]
+        g = AGraph(directed=True)
+        triples = list(self.get_triples())
+        nodeset = set(chain.from_iterable((t.subject, t.object)
+                                          for t in triples))
+        for n in nodeset:
+            label = "%s: %s" % (n.id, n.word)
+            for k, v in n.__dict__.iteritems():
+                if k not in ignore_properties:
+                    label += "\\n%s: %s" % (k, v)
+            g.add_node(_id(n), label=label)
+
+        # create edges
+        for triple in triples:
+            kargs = (triple_args_function(triple)
+                     if triple_args_function else {})
+            if 'label' not in kargs:
+                kargs['label'] = triple.predicate
+            g.add_edge(_id(triple.subject), _id(triple.object), **kargs)
+        # some theme options
+        g.graph_attr["rankdir"] = "BT"
+        g.node_attr["shape"] = "rect"
+        g.edge_attr["edgesize"] = 10
+        g.node_attr["fontsize"] = 10
+        g.edge_attr["fontsize"] = 10
+
+        return g
+
 
 def _saf_to_rdf(saf_article, sentence_id):
     """
@@ -154,8 +194,8 @@ def _saf_to_rdf(saf_article, sentence_id):
     representing the given analysed sentence
     """
     def _token_uri(token):
-        uri = "t_{id}_{lemma}".format(id=token['id'],
-                                      lemma=unidecode(unicode(token['lemma'])))
+        lemma = unidecode(unicode(token['lemma']))
+        uri = "t_{id}_{lemma}".format(id=token['id'], lemma=lemma)
         return NS_AMCAT[uri]
 
     def _rel_uri(dependency):
@@ -191,36 +231,3 @@ def _saf_to_rdf(saf_article, sentence_id):
     #             rel_uri = NS_AMCAT["frame_{ename}".format(ename=e["name"])]
     #             for term in e["target"]:
     #                 yield uri, rel_uri,  term_uris[term]
-
-
-def visualise_triples(triples,  triple_args_function=None,
-                      ignore_properties=VIS_IGNORE_PROPERTIES):
-    """
-    Visualise a triples representation of Triples such as retrieved from
-    TreeTransformer.get_triples
-    """
-    g = dot.Graph()
-    nodes = {}  # Node -> dot.Node
-    # create nodes
-    nodeset = set(chain.from_iterable((t.subject, t.object) for t in triples))
-    for n in nodeset:
-        label = "%s: %s" % (n.position, n.label)
-        for k, v in n.__dict__.iteritems():
-            if k not in ignore_properties:
-                label += "\\n%s: %s" % (k, v)
-        node = dot.Node(id="node_%s" % n.position, label=label)
-        g.addNode(node)
-        nodes[n] = node
-    # create edges
-    for triple in triples:
-        kargs = triple_args_function(triple) if triple_args_function else {}
-        if 'label' not in kargs:
-            kargs['label'] = triple.predicate
-        g.addEdge(nodes[triple.subject], nodes[triple.object], **kargs)
-    # some theme options
-    g.theme.graphattrs["rankdir"] = "BT"
-    g.theme.shape = "rect"
-    g.theme.edgesize = 10
-    g.theme.fontsize = 10
-
-    return g

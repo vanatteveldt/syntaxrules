@@ -2,6 +2,8 @@
 
 from distutils.core import setup
 
+# sudo apt-get install libgraphviz-dev
+
 setup(
     name="syntaxrules",
     description="Tools for manipulating syntax trees",

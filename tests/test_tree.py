@@ -2,12 +2,13 @@ import logging
 import json
 import sys
 import os.path
+import tempfile
 
-from nose.tools import assert_equal
+from nose.tools import assert_equal, assert_false, assert_in
 from unittest import SkipTest
 
 from syntaxrules.soh import SOHServer
-from syntaxrules.syntaxtree import SyntaxTree
+from syntaxrules.syntaxtree import SyntaxTree, VIS_GREY_REL, NS_AMCAT
 
 import syntaxrules
 _ROOT = os.path.dirname(syntaxrules.__file__)
@@ -59,11 +60,16 @@ def _check_soh():
                        "skipping test")
 
 
-def test_load():
+def _get_tree(sid=1):
     _check_soh()
     soh = SOHServer(url="http://localhost:3030/x")
     t = SyntaxTree(soh)
-    t.load_saf(TEST_SAF, 2)
+    t.load_saf(TEST_SAF, sid)
+    return t
+
+
+def test_load():
+    t = _get_tree(sid=2)
     triples = list(t.get_triples())
     assert_equal(len(triples), 1)
     assert_equal(triples[0].predicate, 'rel_nsubj')
@@ -72,13 +78,10 @@ def test_load():
 
 
 def test_lexicon():
-    _check_soh()
-    soh = SOHServer(url="http://localhost:3030/x")
-    t = SyntaxTree(soh)
-    t.load_saf(TEST_SAF, 1)
+    t = _get_tree()
     t.apply_lexicon(TEST_RULES['lexicon'])
 
-    classes = {k.replace("http://amcat.vu.nl/amcat3/", ":"): v.get('lexclass')
+    classes = {k.replace(NS_AMCAT, ":"): str(v.get('lexclass'))
                for (k, v) in t.get_tokens().iteritems()}
     assert_equal(classes, {":t_2_marry": "marry",
                            ":t_3_Mary": 'person',
@@ -86,14 +89,34 @@ def test_lexicon():
 
 
 def test_rules():
-    _check_soh()
-    soh = SOHServer(url="http://localhost:3030/x")
-    t = SyntaxTree(soh)
-    t.load_saf(TEST_SAF, 1)
+    t = _get_tree()
     t.apply_ruleset(TEST_RULES)
-
     triples = [tr for tr in t.get_triples() if tr.predicate == "marry"]
 
     assert_equal(len(triples), 1)
     assert_equal(triples[0].subject.lemma, 'John')
     assert_equal(triples[0].object.lemma, 'Mary')
+
+
+def test_graph():
+    t = _get_tree()
+    g = t.get_graphviz()
+    assert_equal(set(g.edges()), {(u't_3_Mary', u't_2_marry'),
+                                  (u't_1_John', u't_2_marry')})
+    assert_in("lemma: John", g.get_node("t_1_John").attr["label"])
+
+    # Can we 'gray out' syntax relations after applying rules
+    t.apply_ruleset(TEST_RULES)
+    t.apply_lexicon([{"lexclass": "man", "lemma": "john"}])
+    g = t.get_graphviz(triple_args_function=VIS_GREY_REL)
+    assert_equal(set(g.edges()), {(u't_3_Mary', u't_2_marry'),
+                                  (u't_1_John', u't_2_marry'),
+                                  (u't_1_John', u't_3_Mary')})
+    assert_false(g.get_edge(u't_1_John', u't_3_Mary').attr.get("color"))
+    assert_equal(g.get_edge(u't_1_John', u't_2_marry').attr.get("color"),
+                 "grey")
+
+    # can we draw it? can't check output, but we can check for errors
+    with tempfile.NamedTemporaryFile() as f:
+        g.draw(f.name, prog="dot")
+        g.draw("/tmp/test.png", prog="dot")
