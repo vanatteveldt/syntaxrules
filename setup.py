@@ -21,5 +21,6 @@ setup(
         "unidecode",
         "rdflib>=4.0.0",
         "pygraphviz",
+        "requests",
     ],
 )

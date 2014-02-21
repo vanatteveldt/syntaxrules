@@ -24,11 +24,14 @@ import re
 from collections import namedtuple, defaultdict
 from itertools import chain
 import logging
+import json
 
+import requests
 from unidecode import unidecode
 from rdflib import ConjunctiveGraph, Namespace, Literal
-
 from pygraphviz import AGraph
+
+from .soh import SOHServer
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +63,9 @@ class SyntaxTree(object):
         """
         @param soh: a SOH server (see amcat.tools.pysoh)
         """
+        if isinstance(soh, (str, unicode)):
+            # it's probably a URL
+            soh = SOHServer(soh)
         self.soh = soh
         self.soh.prefixes[""] = AMCAT
 
@@ -77,11 +83,17 @@ class SyntaxTree(object):
         """
         Load triples from a SAF article
         (see https://gist.github.com/vanatteveldt/9027118)
+        @param saf_article: a dict, url, or file
         """
+        if isinstance(saf_article, file):
+            saf_article = json.load(file)
+        elif isinstance(saf_article, (str, unicode)):
+            saf_article = requests.get(saf_article).json()
         triples = _saf_to_rdf(saf_article, sentence_id)
         self.load_sentence(triples)
 
-    def get_triples(self, ignore_rel=True, filter_predicate=None):
+    def get_triples(self, ignore_rel=True, filter_predicate=None,
+                    ignore_grammatical=False, minimal=False):
         """Retrieve the triples for the loaded sentence"""
         result = []
         if isinstance(filter_predicate, (str, unicode)):
@@ -99,11 +111,17 @@ class SyntaxTree(object):
             else:
                 o = unicode(o)
                 if not ((ignore_rel and pred == "rel")
+                        or (ignore_grammatical and pred.startswith("rel_"))
                         or (filter_predicate and pred not in filter_predicate)
                         or (pred == RDF_TYPE)):
                     parent = nodes.setdefault(o, Node(uri=o))
                     result.append(Triple(child, pred, parent))
+
+        if minimal:
+            return [{"subject": s.id,"predicate": p, "object": o.id}
+                    for (s, p, o) in result]
         return result
+
 
     def apply_ruleset(self, ruleset):
         """
