@@ -21,8 +21,7 @@ print(triples[0].predicate)
 print(triples[0].subject)
 
 # get newly created triples in minimal json form
-import json
-print json.dumps(t.get_triples(ignore_grammatical=True, minimal=True))
+print t.get_triples(ignore_grammatical=True, minimal=True)
 
 # Visualize to /tmp/test2.png, grey out syntax relations
 from syntaxrules import VIS_GREY_REL
