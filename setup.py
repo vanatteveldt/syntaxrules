@@ -18,6 +18,7 @@ setup(
     ],
     install_requires=[
         "unidecode",
-        "rdflib",
+        "rdflib>=4.0.0",
+        "pygraphviz",
     ],
 )
