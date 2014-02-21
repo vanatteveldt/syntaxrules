@@ -6,6 +6,7 @@ from distutils.core import setup
 
 setup(
     name="syntaxrules",
+    version="0.0.01",
     description="Tools for manipulating syntax trees",
     author="Wouter van Atteveldt",
     author_email="wouter@vanatteveldt.com",
