@@ -197,7 +197,11 @@ class SyntaxTree(object):
                      if triple_args_function else {})
             if triple.predicate.startswith('frame_'):
                 kargs['weight'] = 0
-                kargs['color'] = 'lightskyblue3'
+
+                # color depending on frame
+                import hashlib
+                hash = hashlib.sha1(triple.predicate.split("_")[1]).hexdigest()
+                kargs['color'] = "#" + hash[:6]
             if 'label' not in kargs:
                 kargs['label'] = triple.predicate
             g.add_edge(_id(triple.subject), _id(triple.object), **kargs)
@@ -232,13 +236,24 @@ def _saf_to_rdf(saf_article, sentence_id):
                 yield uri, NS_AMCAT[k], Literal(unidecode(unicode(v)))
             tokens[int(token['id'])] = uri
 
+    parents = {}  # child_id : parent_id, store to filter frames
     for dep in saf_article['dependencies']:
         if int(dep['child']) in tokens:
             child = tokens[int(dep['child'])]
             parent = tokens[int(dep['parent'])]
             for pred in _rel_uri(dep), NS_AMCAT["rel"]:
                 yield child, pred, parent
+                parents[int(dep['child'])] = int(dep['parent'])
 
+    def is_child(child, parent):
+        if child == parent: return True
+        if child not in parents: return False
+        return is_child(parents[child], parent)
+
+    def has_ancestor(node, other_nodes):
+        for o in other_nodes:
+            if is_child(node, o):
+                return True
 
     if 'frames' in saf_article:
         for i, f in enumerate(f for f in saf_article['frames']
@@ -246,6 +261,12 @@ def _saf_to_rdf(saf_article, sentence_id):
             for target in f["target"]:
                 yield tokens[target], NS_AMCAT["frame"], Literal(f["name"])
                 for e in f["elements"]:
-                    rel_uri = NS_AMCAT["frame_{ename}".format(ename=e["name"])]
-                    for term in e["target"]:
+                    rel_uri = NS_AMCAT["frame_{i}_{ename}"
+                                       .format(i=i, ename=e["name"])]
+                    targets = e['target']
+                    # remove children of target
+                    targets = [t for t in targets
+                               if not has_ancestor(t, set(targets) - {t})]
+
+                    for term in targets:
                         yield tokens[target], rel_uri,  tokens[term]
