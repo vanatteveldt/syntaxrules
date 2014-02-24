@@ -154,6 +154,7 @@ class SyntaxTree(object):
         lemma can be a list or a string
         """
         for uri, token in self.get_tokens().iteritems():
+            if 'pos' not in token: continue # not a word
             uri = str(uri).replace(AMCAT, ":")
             pos = token['pos']
             lemma = token['lemma'].lower()
@@ -183,7 +184,8 @@ class SyntaxTree(object):
         nodeset = set(chain.from_iterable((t.subject, t.object)
                                           for t in triples))
         for n in nodeset:
-            label = "%s: %s" % (n.id, n.word)
+            label = n.word if hasattr(n, "word") else n.label
+            label = "%s: %s" % (n.id, label)
             for k, v in n.__dict__.iteritems():
                 if k not in ignore_properties:
                     label += "\\n%s: %s" % (k, v)
@@ -193,6 +195,9 @@ class SyntaxTree(object):
         for triple in triples:
             kargs = (triple_args_function(triple)
                      if triple_args_function else {})
+            if triple.predicate.startswith('frame_'):
+                kargs['weight'] = 0
+                kargs['color'] = 'lightskyblue3'
             if 'label' not in kargs:
                 kargs['label'] = triple.predicate
             g.add_edge(_id(triple.subject), _id(triple.object), **kargs)
@@ -212,7 +217,7 @@ def _saf_to_rdf(saf_article, sentence_id):
     representing the given analysed sentence
     """
     def _token_uri(token):
-        lemma = unidecode(unicode(token['lemma']))
+        lemma = re.sub("\W","",unidecode(unicode(token['lemma'])))
         uri = "t_{id}_{lemma}".format(id=token['id'], lemma=lemma)
         return NS_AMCAT[uri]
 
@@ -234,18 +239,13 @@ def _saf_to_rdf(saf_article, sentence_id):
             for pred in _rel_uri(dep), NS_AMCAT["rel"]:
                 yield child, pred, parent
 
-    # for i, f in enumerate(naf_article.fixed_frames):
-    #     if f["target"][0] in words:
-    #         uri = NS_AMCAT["frame_{i}_{fname}".format(fname=f["name"],
-    #                                                   **locals())]
-    #         yield uri, NS_AMCAT["position"], Literal(1000+i)
-    #         yield uri, NS_AMCAT["label"], Literal(f["name"])
-    #         yield uri, NS_AMCAT["frame"], Literal(f["name"])
 
-
-    #         for term in f["target"]:
-    #             yield uri, NS_AMCAT["frame_predicate"], term_uris[term]
-    #         for e in f["elements"]:
-    #             rel_uri = NS_AMCAT["frame_{ename}".format(ename=e["name"])]
-    #             for term in e["target"]:
-    #                 yield uri, rel_uri,  term_uris[term]
+    if 'frames' in saf_article:
+        for i, f in enumerate(f for f in saf_article['frames']
+                              if int(f['sentence']) == sentence_id):
+            for target in f["target"]:
+                yield tokens[target], NS_AMCAT["frame"], Literal(f["name"])
+                for e in f["elements"]:
+                    rel_uri = NS_AMCAT["frame_{ename}".format(ename=e["name"])]
+                    for term in e["target"]:
+                        yield tokens[target], rel_uri,  tokens[term]
