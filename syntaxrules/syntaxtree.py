@@ -139,7 +139,7 @@ class SyntaxTree(object):
         """
         self.soh.update(where=rule['condition'],
                         insert=rule.get('insert', ''),
-                        delete=rule.get('delete', ''))
+                        delete=rule.get('remove', ''))
 
     def get_tokens(self):
         tokens = defaultdict(dict)  # id : {attrs}
