@@ -261,12 +261,17 @@ def _saf_to_rdf(saf_article, sentence_id):
             for target in f["target"]:
                 yield tokens[target], NS_AMCAT["frame"], Literal(f["name"])
                 for e in f["elements"]:
-                    rel_uri = NS_AMCAT["frame_{i}_{ename}"
-                                       .format(i=i, ename=e["name"])]
+                    rel_uri = NS_AMCAT["frame_{ename}"
+                                       .format(i=i, ename=e["name"].lower())]
                     targets = e['target']
                     # remove children of target
                     targets = [t for t in targets
                                if not has_ancestor(t, set(targets) - {t})]
+                    # drop grammatical isolates
+                    targets = [t for t in targets
+                               if t in parents]
+
 
                     for term in targets:
-                        yield tokens[target], rel_uri,  tokens[term]
+                        if target != term: # drop frames pointing to self
+                            yield tokens[target], rel_uri,  tokens[term]
