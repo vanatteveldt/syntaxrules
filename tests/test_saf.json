@@ -16,7 +16,7 @@
             "sentence": 1,
             "pos": "NNP",
             "lemma": "John",
-            "offset": "0",
+            "offset": "1",
             "id": 1
         },
         {
@@ -36,12 +36,20 @@
             "id": 3
         },
         {
+            "word": "Little",
+            "sentence": 1,
+            "pos": "JJ",
+            "lemma": "little",
+            "offset": "0",
+            "id": 4
+        },
+        {
             "word": "It",
             "sentence": 2,
             "pos": "NNP",
             "lemma": "it",
             "offset": "0",
-            "id": 4
+            "id": 5
         },
         {
             "word": "rains",
@@ -49,10 +57,15 @@
             "pos": "VBD",
             "lemma": "rain",
             "offset": "3",
-            "id": 5
+            "id": 6
         }
     ],
     "dependencies": [
+        {
+            "relation": "amod",
+            "parent": 1,
+            "child": 4
+        },
         {
             "relation": "nsubj",
             "parent": 2,
@@ -65,8 +78,8 @@
         },
         {
             "relation": "nsubj",
-            "parent": 5,
-            "child": 4
+            "parent": 6,
+            "child": 5
         }
     ]
 }

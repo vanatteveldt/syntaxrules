@@ -1,0 +1,129 @@
+{
+    "rules": [
+        {
+            "remarks": "1783723, 2235672",
+            "insert": "?parent :lexclass \"zeg\"",
+            "order": 1,
+            "condition": "?child :lemma ?clemma.\r\n?parent :lemma ?plemma.\r\n?child :rel_body?/:rel_svp ?parent\r\nFILTER ((?clemma = \"ken\" && ?plemma = \"geef\")\r\n|| (?clemma = \"weet\" && ?plemma = \"laat\"))",
+            "label": "te kennen geven"
+        },
+        {
+            "insert": "?colon :lexclass \"qpunc\"",
+            "order": 1,
+            "condition": "?colon :lemma ?x\r\nFILTER (?x in (\"\\\"\", \"'\", \":\"))",
+            "label": "colon"
+        },
+        {
+            "remarks": "2106795",
+            "insert": "?x ?rel ?y",
+            "order": 2,
+            "condition": "?x :rel_cnj ?z.\r\n?z ?rel ?y.\r\n?y :lemma []",
+            "label": "cnj and punc"
+        },
+        {
+            "remarks": "2342205",
+            "insert": "?punc :lexclass \"colon\"",
+            "order": 3,
+            "condition": "?colon :lemma \":\";\r\n  :rel_-- ?punc.\r\n?punc :pos \".\"",
+            "label": "put colon on top"
+        },
+        {
+            "remarks": "2075271",
+            "insert": "?source :quote ?quote",
+            "order": 9,
+            "condition": "?zeg :lexclass \"zeg\";\r\n   :rel_-- [?lexclass \"qpunc\"].\r\n?quote :rel_nucl ?zeg.\r\n?source :rel_su ?zeg",
+            "label": "zegt a tegen b: ...."
+        },
+        {
+            "remarks": "2386473",
+            "insert": "?source :quote ?quote",
+            "order": 10,
+            "condition": "?volgens :lexclass \"volgens\".\r\n?source :rel_obj1 ?volgens.\r\n?volgens :rel_mod|:rel_tag ?quote",
+            "label": "volgens"
+        },
+        {
+            "remarks": "1742451",
+            "insert": "?source :quote ?quote",
+            "order": 10,
+            "condition": "?zeg :lexclass ?lexclass.\r\n?source :rel_su ?zeg.\r\n?quote :rel_body ?dat.\r\n?dat :lemma \"dat\"; :rel_vc ?zeg\r\nFILTER (?lexclass IN (\"zeg\", \"vind\"))",
+            "label": "piet zegt dat ..."
+        },
+        {
+            "remarks": "1663319",
+            "insert": "?source :quote ?quote",
+            "order": 10,
+            "condition": "?quote :rel_su ?blijkt.\r\n?source :rel_obj1/:rel_pc ?blijkt.\r\n?blijkt :lemma \"blijk\"",
+            "label": "x blijkt uit y"
+        },
+        {
+            "insert": "?source :quote ?a.\r\n?source :quote ?b.",
+            "order": 10,
+            "condition": "?noem :lexclass \"noem\".\r\n?source :rel_su ?noem.\r\n?a :rel_predc ?noem.\r\n?b :rel_obj1 ?noem.",
+            "label": "a noemt b een c"
+        },
+        {
+            "remarks": "1663323, 2342205",
+            "insert": "?source :quote ?quote",
+            "order": 10,
+            "condition": "?source :rel_su ?top.\r\n?quote :rel_sat ?top.\r\n?top :rel_--/:lexclass \"qpunc\"",
+            "label": "hij kan het weten : ... (colon - sat )"
+        },
+        {
+            "insert": "?source :quote ?quote",
+            "order": 10,
+            "condition": "?zeg :lexclass ?lexclass.\r\n?zeg :rel_tag ?quote.\r\n?source :rel_su ?zeg\r\nFILTER (?lexclass IN (\"zeg\", \"vind\"))",
+            "label": "..., zegt x"
+        },
+        {
+            "remarks": "2075340, 2166162, 2166207",
+            "insert": "?source :quote ?quote",
+            "order": 11,
+            "condition": "?source :rel_-- [:lexclass \"qpunc\"].\r\n?quote :rel_nucl|:rel_sat ?source.\r\nFILTER NOT EXISTS {?source :pos \".\"}\r\nFILTER NOT EXISTS {[] :quote ?quote}",
+            "label": "pietje: ..."
+        }
+    ],
+    "lexicon": [
+        {
+            "lexclass": "volgens",
+            "lemma": [
+                "volgens",
+                "aldus"
+            ]
+        },
+        {
+            "lexclass": "zeg",
+            "lemma": [
+                "zeg",
+                "stel",
+                "roep",
+                "schrijf",
+                "denk",
+                "stel_vast"
+            ]
+        },
+        {
+            "lexclass": "vind",
+            "lemma": [
+                "vind",
+                "meen",
+                "beken",
+                "concludeer",
+                "erken",
+                "waarschuw",
+                "weet"
+            ]
+        },
+        {
+            "lexclass": "noem",
+            "lemma": [
+                "noem"
+            ]
+        },
+        {
+            "lexclass": "colon",
+            "lemma": [
+                ":"
+            ]
+        }
+    ]
+}

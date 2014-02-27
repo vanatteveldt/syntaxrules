@@ -1,0 +1,156 @@
+{
+  "tokens": [
+    {
+      "word": "zegt",
+      "sentence": 1,
+      "pos": "verb",
+      "id": 5,
+      "lemma": "zeg",
+      "offset": 2,
+      "pos_minor": "hebben,sg3,tr_sbar",
+      "pos_major": "verb",
+      "pos1": "V"
+    },
+    {
+      "word": "Marie",
+      "sentence": 1,
+      "pos": "name",
+      "id": 7,
+      "lemma": "Marie",
+      "offset": 3,
+      "pos_minor": "both,PER",
+      "pos_major": "proper_name",
+      "pos1": "M"
+    },
+    {
+      "word": "dat",
+      "sentence": 1,
+      "pos": "comp",
+      "id": 1,
+      "lemma": "dat",
+      "offset": 4,
+      "pos_minor": "dat",
+      "pos_major": "complementizer",
+      "pos1": "C"
+    },
+    {
+      "word": "het",
+      "sentence": 1,
+      "pos": "det",
+      "id": 9,
+      "lemma": "het",
+      "offset": 5,
+      "pos_minor": "het,nwh,nmod,pro,nparg,wkpro",
+      "pos_major": "determiner",
+      "pos1": "D"
+    },
+    {
+      "word": ".",
+      "sentence": 1,
+      "pos": "punct",
+      "id": 6,
+      "lemma": ".",
+      "offset": 8,
+      "pos_minor": "punt",
+      "pos_major": "punct",
+      "pos1": "."
+    },
+    {
+      "word": "waar",
+      "sentence": 1,
+      "pos": "adj",
+      "id": 8,
+      "lemma": "waar",
+      "offset": 6,
+      "pos_minor": "no_e(nonadv)",
+      "pos_major": "adjective",
+      "pos1": "A"
+    },
+    {
+      "word": "is",
+      "sentence": 1,
+      "pos": "verb",
+      "id": 2,
+      "lemma": "ben",
+      "offset": 7,
+      "pos_minor": "unacc,sg_heeft,copula",
+      "pos_major": "verb",
+      "pos1": "V"
+    },
+    {
+      "word": "Volgens",
+      "sentence": 1,
+      "pos": "prep",
+      "id": 3,
+      "lemma": "volgens",
+      "offset": 0,
+      "pos_minor": "volgens,[]",
+      "pos_major": "preposition",
+      "pos1": "P"
+    },
+    {
+      "word": "Jan",
+      "sentence": 1,
+      "pos": "name",
+      "id": 4,
+      "lemma": "Jan",
+      "offset": 1,
+      "pos_minor": "both,PER",
+      "pos_major": "proper_name",
+      "pos1": "M"
+    }
+  ],
+  "header": {
+    "format-version": "0.0",
+    "processed": [
+      {
+        "started": "2014-02-27T21:21:41.712735",
+        "module-version": "Alpino-x86_64-linux-glibc2.5-20214",
+        "module": "xtas.tasks.single.alpino"
+      }
+    ],
+    "format": "SAF"
+  },
+  "dependencies": [
+    {
+      "relation": "body",
+      "parent": 1,
+      "child": 2
+    },
+    {
+      "relation": "obj1",
+      "parent": 3,
+      "child": 4
+    },
+    {
+      "relation": " --",
+      "parent": 5,
+      "child": 6
+    },
+    {
+      "relation": "mod",
+      "parent": 5,
+      "child": 3
+    },
+    {
+      "relation": "su",
+      "parent": 5,
+      "child": 7
+    },
+    {
+      "relation": "vc",
+      "parent": 5,
+      "child": 1
+    },
+    {
+      "relation": "predc",
+      "parent": 2,
+      "child": 8
+    },
+    {
+      "relation": "su",
+      "parent": 2,
+      "child": 9
+    }
+  ]
+}

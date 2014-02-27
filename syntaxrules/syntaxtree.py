@@ -172,6 +172,38 @@ class SyntaxTree(object):
                                   .format(**locals()))
                         self.soh.update(insert=insert)
 
+    def get_relations(self):
+        """
+        Return all non-syntactic (ie non-rel_*) triples
+        subject and object are given as head and as a list of nodes
+        where the list consists of all lower nodes not in another function
+        """
+        children = defaultdict(list)  # parent id : [child ids]
+        relations = []  # (child id, predicate, parent id)
+        inrelation = set()  # ids of all nodes in a relation
+        for s, p, o in self.get_triples():
+            s, o = int(s.id), int(o.id)
+            if p.startswith("rel_"):
+                children[o].append(s)
+            else:
+                relations.append((s, p, o))
+                inrelation |= {s, o}
+
+        def getnodes(n):
+            yield n
+            for c in children[n]:
+                if c not in inrelation:
+                    for n2 in getnodes(c):
+                        yield n2
+
+        for s,p,o in relations:
+            yield {"predicate": p,
+                   "subject": s,
+                   "subject_nodes": list(getnodes(s)),
+                   "object": o,
+                   "object_nodes": list(getnodes(o)),
+                   }
+
     def get_graphviz(self, triple_args_function=None,
                      ignore_properties=VIS_IGNORE_PROPERTIES):
         """
@@ -227,7 +259,9 @@ def _saf_to_rdf(saf_article, sentence_id):
         return NS_AMCAT[uri]
 
     def _rel_uri(dependency):
-        return NS_AMCAT["rel_{rel}".format(rel=dependency['relation'])]
+        rel = dependency['relation']
+        rel = re.sub("[^\w-]", "", rel)
+        return NS_AMCAT["rel_{rel}".format(**locals())]
 
     tokens = {}  # token_id : uri
     for token in saf_article['tokens']:
