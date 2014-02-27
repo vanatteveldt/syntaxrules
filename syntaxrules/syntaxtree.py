@@ -179,7 +179,7 @@ class SyntaxTree(object):
         """
         def _id(node):
             return node.uri.split("/")[-1]
-        g = AGraph(directed=True)
+        g = AGraph(directed=True, strict=False)
         triples = list(self.get_triples())
         nodeset = set(chain.from_iterable((t.subject, t.object)
                                           for t in triples))
@@ -207,6 +207,7 @@ class SyntaxTree(object):
             g.add_edge(_id(triple.subject), _id(triple.object), **kargs)
         # some theme options
         g.graph_attr["rankdir"] = "BT"
+        g.graph_attr["concentrate"] = "false"
         g.node_attr["shape"] = "rect"
         g.edge_attr["edgesize"] = 10
         g.node_attr["fontsize"] = 10
