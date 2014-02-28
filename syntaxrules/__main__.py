@@ -30,7 +30,7 @@ import syntaxrules
 parser = ArgumentParser(prog="syntaxrules", epilog=__doc__,
                         formatter_class=RawDescriptionHelpFormatter)
 parser.add_argument("ruleset", help="Name of the file containing the  "
-                    "rule set (in json)")
+                    "rule set (in json), Use '-' to not apply any rules")
 parser.add_argument("--input", "-i", help="Name of the inputfile "
                     "(in SAF json) to use. "
                     "If omitted, input will be read from stdin")
@@ -46,28 +46,28 @@ parser.add_argument("--roles-only", "-r", action='store_true',
 parser.add_argument("--visualize-format", "-f", action='store',
                     help="Format for the visualization, e.g. png or dot. "
                     "If omitted, use output extension or default to png")
+parser.add_argument("--sentence", "-s", action='store', default=1, type=int,
+                    help="ID of the sentence to use")
 
 args = parser.parse_args()
 # prepare input and output files
-ruleset = json.load(open(args.ruleset))
 input_file = sys.stdin if args.input is None else open(args.input)
 saf= json.load(input_file)
 outfile = (sys.stdout if args.output is None
            else open(args.output, "w"))
 
-# do the work
+# get the syntax tree
 soh = syntaxrules.SOHServer(url="http://localhost:3030/x")
 t = syntaxrules.SyntaxTree(soh)
-t.load_saf(saf, sentence_id=1)
-t.apply_ruleset(ruleset)
+t.load_saf(saf, sentence_id=args.sentence)
+
+# apply the rules
+if args.ruleset != '-':
+    ruleset = json.load(open(args.ruleset))
+    t.apply_ruleset(ruleset)
 
 
-# output
-def _convert_to_words(role):
-
-
-    return {k : _convert(v) for (k, v) in role.iteritems()}
-
+# roles
 roles = list(t.get_relations())
 if args.words:
     words = {t['id']: t['word'] for t in saf['tokens']}
@@ -82,6 +82,7 @@ if args.words:
         return val
     roles = _convert(roles)
 
+# output
 if args.roles_only:
     json.dump(roles, outfile, indent=2)
 elif args.visualize:
