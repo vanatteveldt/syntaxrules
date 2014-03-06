@@ -69,15 +69,6 @@ class SyntaxTree(object):
         self.soh = soh
         self.soh.prefixes[""] = AMCAT
 
-    def load_sentence(self, rdf_triples):
-        """
-        Load the given triples into the triple store
-        """
-        g = ConjunctiveGraph()
-        g.bind("amcat", AMCAT)
-        for triple in rdf_triples:
-            g.add(triple)
-        self.soh.add_triples(g, clear=True)
 
     def load_saf(self, saf_article, sentence_id):
         """
@@ -90,7 +81,27 @@ class SyntaxTree(object):
         elif isinstance(saf_article, (str, unicode)):
             saf_article = requests.get(saf_article).json()
         triples = _saf_to_rdf(saf_article, sentence_id)
-        self.load_sentence(triples)
+        self._load_coreferences(saf_article)
+        self._load_sentence(triples)
+
+    def _load_sentence(self, rdf_triples):
+        """Load the given triples into the triple store"""
+        g = ConjunctiveGraph()
+        g.bind("amcat", AMCAT)
+        for triple in rdf_triples:
+            g.add(triple)
+        self.soh.add_triples(g, clear=True)
+
+    def _load_coreferences(self, saf_article):
+        """Store the coreference groups as {node: coreferencing_nodes}"""
+        coref_groups = []
+        for a, b in saf_article['coreferences']:
+            # take only the heads of each coref group
+            coref_groups.append([a[0], b[0]])
+        self.coreference_groups = {}
+        for nodes in merge(coref_groups):
+            for node in nodes:
+                self.coreference_groups[node] = nodes
 
     def get_triples(self, ignore_rel=True, filter_predicate=None,
                     ignore_grammatical=False, minimal=False):
@@ -153,9 +164,11 @@ class SyntaxTree(object):
         Lexicon should consist of dicts with lexclass, lemma, and optional pos
         lemma can be a list or a string
         """
+        classes = defaultdict(set) #  token -> classes
+        uris = {}
         for uri, token in self.get_tokens().iteritems():
             if 'pos' not in token: continue # not a word
-            uri = str(uri).replace(AMCAT, ":")
+            uris[int(token['id'])] = uri
             pos = token['pos']
             lemma = token['lemma'].lower()
             for lex in lexicon:
@@ -168,9 +181,17 @@ class SyntaxTree(object):
                 for target in lemmata:
                     if target == lemma or (target.endswith("*")
                                            and lemma.startswith(target[:-1])):
-                        insert = ('{uri} :lexclass "{lexclass}"'
-                                  .format(**locals()))
-                        self.soh.update(insert=insert)
+                        id = int(token['id'])
+                        print("lexclass: {lexclass}, id: {id!r}, corefs: {self.coreference_groups}".format(**locals()))
+                        for id in self.coreference_groups.get(id, [id]):
+                            classes[id].add(lexclass)
+        inserts = []
+        for id, lexclasses in classes.iteritems():
+            uri = str(uris[id]).replace(AMCAT, ":")
+            inserts += ['{uri} :lexclass "{lexclass}"'.format(**locals())
+                       for lexclass in lexclasses]
+        insert = ". ".join(inserts)
+        self.soh.update(insert=insert)
 
     def get_descendants(self, node, triples):
         """
@@ -317,3 +338,22 @@ def _saf_to_rdf(saf_article, sentence_id):
                     for term in targets:
                         if target != term: # drop frames pointing to self
                             yield tokens[target], rel_uri,  tokens[term]
+
+
+def merge(lists):
+    """
+    Merge the lists so lists with overlap are joined together
+    (i.e. [[1,2], [3,4], [2,5]] --> [[1,2,5], [3,4]])
+    from: http://stackoverflow.com/a/9400562
+    """
+    newsets, sets = [set(lst) for lst in lists if lst], []
+    while len(sets) != len(newsets):
+        sets, newsets = newsets, []
+        for aset in sets:
+            for eachset in newsets:
+                if not aset.isdisjoint(eachset):
+                    eachset.update(aset)
+                    break
+            else:
+                newsets.append(aset)
+    return newsets
