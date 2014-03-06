@@ -156,7 +156,11 @@ class SyntaxTree(object):
         tokens = defaultdict(dict)  # id : {attrs}
         for s, p, o in self.soh.get_triples():
             if isinstance(o, Literal):
-                tokens[s][p.replace(NS_AMCAT, "")] = unicode(o)
+                attr = p.replace(NS_AMCAT, "")
+                if attr == "lexclass":
+                    tokens[s][attr] = tokens[s].get(attr, []) + [unicode(o)]
+                else:
+                    tokens[s][attr] = unicode(o)
         return tokens
 
     def apply_lexicon(self, lexicon):
