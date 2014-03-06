@@ -172,36 +172,43 @@ class SyntaxTree(object):
                                   .format(**locals()))
                         self.soh.update(insert=insert)
 
-    def get_relations(self):
+    def get_descendants(self, node, triples):
         """
-        Return all non-syntactic (ie non-rel_*) triples
-        subject and object are given as head and as a list of nodes
-        where the list consists of all lower nodes not in another function
+        Get all decendants of node according to rel_ triples,
+        but blocks on any node in a non-rel_ triple
         """
         children = defaultdict(list)  # parent id : [child ids]
-        relations = []  # (child id, predicate, parent id)
         inrelation = set()  # ids of all nodes in a relation
-        for s, p, o in self.get_triples():
+        for s, p, o in triples:
             s, o = int(s.id), int(o.id)
             if p.startswith("rel_"):
                 children[o].append(s)
             else:
-                relations.append((s, p, o))
                 inrelation |= {s, o}
-
         def getnodes(n):
             yield n
             for c in children[n]:
                 if c not in inrelation:
                     for n2 in getnodes(c):
                         yield n2
+        return getnodes(node)
 
-        for s,p,o in relations:
-            yield {"predicate": p,
-                   "subject": s,
-                   "subject_nodes": list(getnodes(s)),
-                   "object": o,
-                   "object_nodes": list(getnodes(o)),
+    def get_relations(self):
+        """
+        Return all non-syntactic (ie non-rel_*) triples
+        subject and object are given as head and as a list of nodes
+        where the list consists of all lower nodes not in another function
+        """
+        triples = list(self.get_triples())
+
+        for s, p, o in triples:
+            if not p.startswith("rel"):
+                s, o = int(s.id), int(o.id)
+                yield {"predicate": p,
+                       "subject": s,
+                       "subject_nodes": list(self.get_descendants(s, triples)),
+                       "object": o,
+                       "object_nodes": list(self.get_descendants(o, triples)),
                    }
 
     def get_graphviz(self, triple_args_function=None,
