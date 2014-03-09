@@ -95,7 +95,7 @@ class SyntaxTree(object):
     def _load_coreferences(self, saf_article):
         """Store the coreference groups as {node: coreferencing_nodes}"""
         coref_groups = []
-        for a, b in saf_article['coreferences']:
+        for a, b in saf_article.get('coreferences', []):
             # take only the heads of each coref group
             coref_groups.append([a[0], b[0]])
         self.coreference_groups = {}
@@ -186,11 +186,12 @@ class SyntaxTree(object):
                     if target == lemma or (target.endswith("*")
                                            and lemma.startswith(target[:-1])):
                         id = int(token['id'])
-                        print("lexclass: {lexclass}, id: {id!r}, corefs: {self.coreference_groups}".format(**locals()))
                         for id in self.coreference_groups.get(id, [id]):
                             classes[id].add(lexclass)
         inserts = []
         for id, lexclasses in classes.iteritems():
+            if id not in uris:
+                continue #  coref to different sentence
             uri = str(uris[id]).replace(AMCAT, ":")
             inserts += ['{uri} :lexclass "{lexclass}"'.format(**locals())
                        for lexclass in lexclasses]
