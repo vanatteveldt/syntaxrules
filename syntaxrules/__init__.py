@@ -1,2 +1,2 @@
-from .syntaxtree import SyntaxTree, VIS_GREY_REL
+from .syntaxtree import *
 from .soh import SOHServer

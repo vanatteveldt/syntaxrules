@@ -37,12 +37,16 @@ log = logging.getLogger(__name__)
 
 AMCAT = "http://amcat.vu.nl/amcat3/"
 NS_AMCAT = Namespace(AMCAT)
-VIS_IGNORE_PROPERTIES = "id", "offset", "sentence", "uri", "word"
-VIS_GREY_REL = lambda triple: ({'color': 'grey'}
-                               if 'rel_' in triple.predicate else {})
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 Triple = namedtuple("Triple", ["subject", "predicate", "object"])
 
+VIS_IGNORE_PROPERTIES = "id", "offset", "sentence", "uri", "word"
+VIS_THEME_OPTIONS = {"graph" : {"rankdir" : "BT",
+                                "concentrate" : "false"},
+                     "node" : {"shape" : "rect",
+                               "fontsize" : 10},
+                     "edge" : {"edgesize" : 10,
+                               "fontsize" : 10}}
 
 class Node(object):
     """
@@ -56,6 +60,28 @@ class Node(object):
         self.__dict__.update(kargs)
     __repr__ = __unicode__
 
+
+def graphviz_node_hook(node, **_):
+    label = node.word if hasattr(node, "word") else node.label
+    labels = ["%s: %s" % (node.id, label)]
+    labels += ["%s: %s" % (k, v)
+               for k, v in node.__dict__.iteritems()
+               if k not in VIS_IGNORE_PROPERTIES]
+    return {"label": "\\n".join(labels)}
+
+def graphviz_triple_hook(triple, grey_rel=False, **_):
+    kargs = {}
+    if grey_rel and 'rel_' in triple.predicate:
+        kargs['color'] = 'grey'
+    if triple.predicate.startswith('frame_'):
+        kargs['weight'] = 0
+        # color depending on frame
+        import hashlib
+        hash = hashlib.sha1(triple.predicate.split("_")[1]).hexdigest()
+        kargs['color'] = "#" + hash[:6]
+    if 'label' not in kargs:
+        kargs['label'] = triple.predicate
+    return kargs
 
 class SyntaxTree(object):
 
@@ -237,47 +263,45 @@ class SyntaxTree(object):
                        "object_nodes": list(self.get_descendants(o, triples)),
                    }
 
-    def get_graphviz(self, triple_args_function=None,
-                     ignore_properties=VIS_IGNORE_PROPERTIES):
+    def get_graphviz(self, triple_hook=graphviz_triple_hook,
+                     node_hook=graphviz_node_hook,
+                     theme_options=VIS_THEME_OPTIONS, **hook_options):
         """
         Create a pygraphviz graph from the tree
+        @param triple_hook: a function that returns an attribute dict (or None)
+                            given a triple and the kargs
+        @param node_hook: a function that returns a label given a node
+                           and the kargs
+        @param theme_options: a dict-of-dicts containing global
+                              graph/node/edge attributes
+        @param hook_options: additional arguments to pass to the hook functions
         """
         def _id(node):
             return node.uri.split("/")[-1]
         g = AGraph(directed=True, strict=False)
         triples = list(self.get_triples())
+        # create nodes
         nodeset = set(chain.from_iterable((t.subject, t.object)
                                           for t in triples))
-        for n in nodeset:
-            label = n.word if hasattr(n, "word") else n.label
-            label = "%s: %s" % (n.id, label)
-            for k, v in n.__dict__.iteritems():
-                if k not in ignore_properties:
-                    label += "\\n%s: %s" % (k, v)
-            g.add_node(_id(n), label=label)
-
+        for n in sorted(nodeset, key=lambda n:n.id):
+            g.add_node(_id(n), **node_hook(n, **hook_options))
+        connected = set()
         # create edges
-        for triple in triples:
-            kargs = (triple_args_function(triple)
-                     if triple_args_function else {})
-            if triple.predicate.startswith('frame_'):
-                kargs['weight'] = 0
-
-                # color depending on frame
-                import hashlib
-                hash = hashlib.sha1(triple.predicate.split("_")[1]).hexdigest()
-                kargs['color'] = "#" + hash[:6]
-            if 'label' not in kargs:
-                kargs['label'] = triple.predicate
-            g.add_edge(_id(triple.subject), _id(triple.object), **kargs)
+        for triple in sorted(triples, key=lambda t:t.predicate):
+            kargs = triple_hook(triple, **hook_options)
+            if kargs:
+                if kargs.get('reverse'):
+                    g.add_edge(_id(triple.object), _id(triple.subject), **kargs)
+                else:
+                    g.add_edge(_id(triple.subject), _id(triple.object), **kargs)
+                connected |= {_id(triple.subject), _id(triple.object)}
+        connected = chain.from_iterable(g.edges())
+        for isolate in set(g.nodes()) - set(connected):
+            g.remove_node(isolate)
         # some theme options
-        g.graph_attr["rankdir"] = "BT"
-        g.graph_attr["concentrate"] = "false"
-        g.node_attr["shape"] = "rect"
-        g.edge_attr["edgesize"] = 10
-        g.node_attr["fontsize"] = 10
-        g.edge_attr["fontsize"] = 10
-
+        for obj, attrs in theme_options.iteritems():
+            for k, v in attrs.iteritems():
+                getattr(g, "%s_attr" % obj)[k] = v
         return g
 
 
