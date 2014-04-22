@@ -237,7 +237,11 @@ class SyntaxTree(object):
                 children[o].append(s)
             else:
                 inrelation |= {s, o}
+        seen = set()
         def getnodes(n):
+            if n in seen:
+                return
+            seen.add(n)
             yield n
             for c in children[n]:
                 if c not in inrelation:
