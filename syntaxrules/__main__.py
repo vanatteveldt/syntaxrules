@@ -57,9 +57,7 @@ outfile = (sys.stdout if args.output is None
            else open(args.output, "w"))
 
 # get the syntax tree
-soh = syntaxrules.SOHServer(url="http://localhost:3030/x")
-t = syntaxrules.SyntaxTree(soh)
-t.load_saf(saf, sentence_id=args.sentence)
+t = syntaxrules.SyntaxTree(saf, sentence_id=args.sentence)
 
 # apply the rules
 if args.ruleset != '-':

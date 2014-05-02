@@ -135,13 +135,12 @@ class SyntaxTree(object):
         return result
 
     def apply_updates(self, updates):
-        def build_update(where="", insert="", delete=""):
+        def update_sparql(condition="", insert="", remove="", **_):
             return u"""PREFIX : <{AMCAT}>
-                       DELETE {{ {delete} }}
+                       DELETE {{ {remove} }}
                        INSERT {{ {insert} }}
-                       WHERE {{ {where} }}""".format(AMCAT=AMCAT, **locals())
-
-        updates = [build_update(**u) for u in updates]
+                       WHERE {{ {condition} }}""".format(AMCAT=AMCAT, **locals())
+        updates = [update_sparql(**u) for u in updates]
         self.graph = sparqlrunner.run(self.graph, updates)
 
     def apply_ruleset(self, ruleset):
@@ -150,25 +149,38 @@ class SyntaxTree(object):
         A ruleset should be a dict with rules and lexicon entries
         """
         updates = [self._get_lexicon_update(ruleset['lexicon'])]
+        updates += ruleset['rules']
         self.apply_updates(updates)
-        #self.apply_lexicon(ruleset['lexicon'])
-        #for rule in ruleset['rules']:
-        #    self.apply_rule(rule)
 
     def apply_rule(self, rule):
-        """
-        Apply the given rule, which should be a dict with
-        condition and insert and/or delete clauses
-        """
-        self.soh.update(where=rule['condition'],
-                        insert=rule.get('insert', ''),
-                        delete=rule.get('remove', ''))
+        self.apply_updates([rule])
+    def apply_lexicon(self, lexicon):
+        updates = [self._get_lexicon_update(lexicon)]
+        self.apply_updates(updates)
 
     def _get_lexicon_update(self, lexicon):
         """
         Lexicon should consist of dicts with lexclass, lemma, and optional pos
         lemma can be a list or a string
         """
+
+        def merge(lists):
+            """
+            Merge the lists so lists with overlap are joined together
+            (i.e. [[1,2], [3,4], [2,5]] --> [[1,2,5], [3,4]])
+            from: http://stackoverflow.com/a/9400562
+            """
+            newsets, sets = [set(lst) for lst in lists if lst], []
+            while len(sets) != len(newsets):
+                sets, newsets = newsets, []
+                for aset in sets:
+                    for eachset in newsets:
+                        if not aset.isdisjoint(eachset):
+                            eachset.update(aset)
+                            break
+                    else:
+                        newsets.append(aset)
+            return newsets
 
         def get_coreferences(coreferences):
             """Decode the SAF coreferences as (node: coreferencing_nodes) pairs"""
@@ -211,17 +223,7 @@ class SyntaxTree(object):
                 inserts.append('{uri} :lexclass "{lexclass}"'.format(**locals()))
         return {"insert": ".\n".join(inserts)}
 
-    def update(self, where="", insert="", delete="", prefixes=None):
-        prefixes = self._prefix_string(prefixes)
-        sparql = u"""{prefixes}
-                    DELETE {{ {delete} }}
-                    INSERT {{ {insert} }}
-                    WHERE {{ {where} }}
-                 """.format(**locals())
-        self.do_update(sparql)
 
-        
-        
     def get_tokens(self):
         tokens = defaultdict(dict)  # id : {attrs}
         for s, p, o in self.graph:
@@ -233,7 +235,6 @@ class SyntaxTree(object):
                     tokens[s][attr] = unicode(o)
         return tokens
 
-  
 
     def get_descendants(self, node, triples):
         """
@@ -319,7 +320,7 @@ class SyntaxTree(object):
                 getattr(g, "%s_attr" % obj)[k] = v
         return g
 
-        
+
 def _saf_to_rdf(saf_article, sentence_id):
     """
     Get the raw RDF subject, predicate, object triples
@@ -382,22 +383,3 @@ def _saf_to_rdf(saf_article, sentence_id):
                     for term in targets:
                         if target != term: # drop frames pointing to self
                             yield tokens[target], rel_uri,  tokens[term]
-
-
-def merge(lists):
-    """
-    Merge the lists so lists with overlap are joined together
-    (i.e. [[1,2], [3,4], [2,5]] --> [[1,2,5], [3,4]])
-    from: http://stackoverflow.com/a/9400562
-    """
-    newsets, sets = [set(lst) for lst in lists if lst], []
-    while len(sets) != len(newsets):
-        sets, newsets = newsets, []
-        for aset in sets:
-            for eachset in newsets:
-                if not aset.isdisjoint(eachset):
-                    eachset.update(aset)
-                    break
-            else:
-                newsets.append(aset)
-    return newsets

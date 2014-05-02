@@ -5,7 +5,6 @@ Pre-defined rules for detecting sources
 from os import path
 import json
 
-from syntaxrules.soh import SOHServer
 from syntaxrules.syntaxtree import SyntaxTree
 
 _CACHE = {}
@@ -25,10 +24,8 @@ def get_sources_nl(tree):
             yield {'source' : rel['subject_nodes'],
                    "quote" : rel['object_nodes']}
 
-def get_all_sources_nl(saf, soh_url="http://localhost:3030/x"):
-    soh = SOHServer(soh_url)
-    t = SyntaxTree(soh)
+def get_all_sources_nl(saf):
     for sid in {token['sentence'] for token in saf['tokens']}:
-        t.load_saf(saf, sid)
+        t = SyntaxTree(saf, sid)
         for source in get_sources_nl(t):
             yield source
