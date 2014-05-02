@@ -31,6 +31,8 @@ from unidecode import unidecode
 from rdflib import ConjunctiveGraph, Namespace, Literal
 from pygraphviz import AGraph
 
+import sparqlrunner
+
 from .soh import SOHServer
 
 log = logging.getLogger(__name__)
@@ -85,49 +87,22 @@ def graphviz_triple_hook(triple, grey_rel=False, **_):
 
 class SyntaxTree(object):
 
-    def __init__(self, soh):
+    def __init__(self, saf_article, sentence_id):
         """
-        @param soh: a SOH server (see amcat.tools.pysoh)
-        """
-        if isinstance(soh, (str, unicode)):
-            # it's probably a URL
-            soh = SOHServer(soh)
-        self.soh = soh
-        self.soh.prefixes[""] = AMCAT
-
-
-    def load_saf(self, saf_article, sentence_id):
-        """
-        Load triples from a SAF article
+        Construct a SyntaxTree object from a SAF article
         (see https://gist.github.com/vanatteveldt/9027118)
         @param saf_article: a dict, url, or file
         """
         if isinstance(saf_article, file):
-            saf_article = json.load(file)
+            saf_article = json.load(saf_article)
         elif isinstance(saf_article, (str, unicode)):
             saf_article = requests.get(saf_article).json()
-        triples = _saf_to_rdf(saf_article, sentence_id)
-        self._load_coreferences(saf_article)
-        self._load_sentence(triples)
+        self.saf_article = saf_article
+        self.graph = ConjunctiveGraph()
+        self.graph.bind("amcat", AMCAT)
+        for triple in _saf_to_rdf(saf_article, sentence_id):
+            self.graph.add(triple)
 
-    def _load_sentence(self, rdf_triples):
-        """Load the given triples into the triple store"""
-        g = ConjunctiveGraph()
-        g.bind("amcat", AMCAT)
-        for triple in rdf_triples:
-            g.add(triple)
-        self.soh.add_triples(g, clear=True)
-
-    def _load_coreferences(self, saf_article):
-        """Store the coreference groups as {node: coreferencing_nodes}"""
-        coref_groups = []
-        for a, b in saf_article.get('coreferences', []):
-            # take only the heads of each coref group
-            coref_groups.append([a[0], b[0]])
-        self.coreference_groups = {}
-        for nodes in merge(coref_groups):
-            for node in nodes:
-                self.coreference_groups[node] = nodes
 
     def get_triples(self, ignore_rel=True, filter_predicate=None,
                     ignore_grammatical=False, minimal=False):
@@ -136,7 +111,7 @@ class SyntaxTree(object):
         if isinstance(filter_predicate, (str, unicode)):
             filter_predicate = [filter_predicate]
         nodes = {}
-        for s, p, o in self.soh.get_triples():
+        for s, p, o in self.graph:
             s = unicode(s)
             child = nodes.setdefault(s, Node(uri=s))
 
@@ -159,15 +134,26 @@ class SyntaxTree(object):
                     for (s, p, o) in result]
         return result
 
+    def apply_updates(self, updates):
+        def build_update(where="", insert="", delete=""):
+            return u"""PREFIX : <{AMCAT}>
+                       DELETE {{ {delete} }}
+                       INSERT {{ {insert} }}
+                       WHERE {{ {where} }}""".format(AMCAT=AMCAT, **locals())
+
+        updates = [build_update(**u) for u in updates]
+        self.graph = sparqlrunner.run(self.graph, updates)
 
     def apply_ruleset(self, ruleset):
         """
         Apply a set of rules to this tree.
         A ruleset should be a dict with rules and lexicon entries
         """
-        self.apply_lexicon(ruleset['lexicon'])
-        for rule in ruleset['rules']:
-            self.apply_rule(rule)
+        updates = [self._get_lexicon_update(ruleset['lexicon'])]
+        self.apply_updates(updates)
+        #self.apply_lexicon(ruleset['lexicon'])
+        #for rule in ruleset['rules']:
+        #    self.apply_rule(rule)
 
     def apply_rule(self, rule):
         """
@@ -178,22 +164,24 @@ class SyntaxTree(object):
                         insert=rule.get('insert', ''),
                         delete=rule.get('remove', ''))
 
-    def get_tokens(self):
-        tokens = defaultdict(dict)  # id : {attrs}
-        for s, p, o in self.soh.get_triples():
-            if isinstance(o, Literal):
-                attr = p.replace(NS_AMCAT, "")
-                if attr == "lexclass":
-                    tokens[s][attr] = tokens[s].get(attr, []) + [unicode(o)]
-                else:
-                    tokens[s][attr] = unicode(o)
-        return tokens
-
-    def apply_lexicon(self, lexicon):
+    def _get_lexicon_update(self, lexicon):
         """
         Lexicon should consist of dicts with lexclass, lemma, and optional pos
         lemma can be a list or a string
         """
+
+        def get_coreferences(coreferences):
+            """Decode the SAF coreferences as (node: coreferencing_nodes) pairs"""
+            coref_groups = []
+            for a, b in coreferences:
+                # take only the heads of each coref group
+                coref_groups.append([a[0], b[0]])
+            for nodes in merge(coref_groups):
+                for node in nodes:
+                    yield node, nodes
+
+        coreferences = dict(get_coreferences(self.saf_article.get('coreferences', [])))
+
         classes = defaultdict(set) #  token -> classes
         uris = {}
         for uri, token in self.get_tokens().iteritems():
@@ -212,17 +200,40 @@ class SyntaxTree(object):
                     if target == lemma or (target.endswith("*")
                                            and lemma.startswith(target[:-1])):
                         id = int(token['id'])
-                        for id in self.coreference_groups.get(id, [id]):
+                        for id in coreferences.get(id, [id]):
                             classes[id].add(lexclass)
         inserts = []
         for id, lexclasses in classes.iteritems():
             if id not in uris:
                 continue #  coref to different sentence
             uri = str(uris[id]).replace(AMCAT, ":")
-            inserts += ['{uri} :lexclass "{lexclass}"'.format(**locals())
-                       for lexclass in lexclasses]
-        insert = ". ".join(inserts)
-        self.soh.update(insert=insert)
+            for lexclass in lexclasses:
+                inserts.append('{uri} :lexclass "{lexclass}"'.format(**locals()))
+        return {"insert": ".\n".join(inserts)}
+
+    def update(self, where="", insert="", delete="", prefixes=None):
+        prefixes = self._prefix_string(prefixes)
+        sparql = u"""{prefixes}
+                    DELETE {{ {delete} }}
+                    INSERT {{ {insert} }}
+                    WHERE {{ {where} }}
+                 """.format(**locals())
+        self.do_update(sparql)
+
+        
+        
+    def get_tokens(self):
+        tokens = defaultdict(dict)  # id : {attrs}
+        for s, p, o in self.graph:
+            if isinstance(o, Literal):
+                attr = p.replace(NS_AMCAT, "")
+                if attr == "lexclass":
+                    tokens[s][attr] = tokens[s].get(attr, []) + [unicode(o)]
+                else:
+                    tokens[s][attr] = unicode(o)
+        return tokens
+
+  
 
     def get_descendants(self, node, triples):
         """
@@ -308,7 +319,7 @@ class SyntaxTree(object):
                 getattr(g, "%s_attr" % obj)[k] = v
         return g
 
-
+        
 def _saf_to_rdf(saf_article, sentence_id):
     """
     Get the raw RDF subject, predicate, object triples
