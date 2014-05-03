@@ -87,7 +87,7 @@ def graphviz_triple_hook(triple, grey_rel=False, **_):
 
 class SyntaxTree(object):
 
-    def __init__(self, saf_article, sentence_id):
+    def __init__(self, saf_article, sentence_id=None):
         """
         Construct a SyntaxTree object from a SAF article
         (see https://gist.github.com/vanatteveldt/9027118)
@@ -321,7 +321,7 @@ class SyntaxTree(object):
         return g
 
 
-def _saf_to_rdf(saf_article, sentence_id):
+def _saf_to_rdf(saf_article, sentence_id=None):
     """
     Get the raw RDF subject, predicate, object triples
     representing the given analysed sentence
@@ -338,7 +338,7 @@ def _saf_to_rdf(saf_article, sentence_id):
 
     tokens = {}  # token_id : uri
     for token in saf_article['tokens']:
-        if int(token['sentence']) == sentence_id:
+        if (sentence_id is None) or (int(token['sentence']) == sentence_id):
             uri = _token_uri(token)
             for k, v in token.iteritems():
                 yield uri, NS_AMCAT[k], Literal(unidecode(unicode(v)))
@@ -365,7 +365,8 @@ def _saf_to_rdf(saf_article, sentence_id):
 
     if 'frames' in saf_article:
         for i, f in enumerate(f for f in saf_article['frames']
-                              if int(f['sentence']) == sentence_id):
+                              if (sentence_id is None
+                                  or int(f['sentence']) == sentence_id)):
             for target in f["target"]:
                 yield tokens[target], NS_AMCAT["frame"], Literal(f["name"])
                 for e in f["elements"]:

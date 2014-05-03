@@ -78,6 +78,21 @@ def test_rules():
     assert_equal(triples[0].subject.lemma, 'John')
     assert_equal(triples[0].object.lemma, 'Mary')
 
+def test_rules_multiple():
+    """Can we apply rules to multiple sentences at once"""
+    _check_jena()
+    triples_single = set()
+    for sid in {t['sentence'] for t in TEST_SAF['tokens']}:
+        t = SyntaxTree(TEST_SAF, sentence_id=sid)
+        t.apply_ruleset(TEST_RULES)
+        triples_single |= set((s.id, p, o.id) for (s,p,o) in t.get_triples())
+
+    t = SyntaxTree(TEST_SAF)
+    t.apply_ruleset(TEST_RULES)
+    triples_all = set((s.id, p, o.id) for (s,p,o) in t.get_triples())
+
+    assert_equal(triples_single, triples_all)
+    
 
 def test_graph():
     _check_jena()
