@@ -33,8 +33,6 @@ from pygraphviz import AGraph
 
 import sparqlrunner
 
-from .soh import SOHServer
-
 log = logging.getLogger(__name__)
 
 AMCAT = "http://amcat.vu.nl/amcat3/"
