@@ -277,6 +277,43 @@ class SyntaxTree(object):
                        "object_nodes": list(self.get_descendants(o, triples)),
                    }
 
+
+    def get_roles(self, ignore="^(rel_|frame_)"):
+        triples = list(self.get_triples())
+
+        predicates = {} # node : predicate (set of nodes)
+        roles = defaultdict(list) # subject_node : [rel]
+        rels = list(self.get_relations())
+        nodes = {} # id : node
+        for s,p,o in triples:
+            sid, oid = int(s.id), int(o.id)
+            nodes[sid] = s
+            nodes[oid] = o
+            if p == "pred":
+                pred =(predicates.get(sid, {sid}) |
+                       predicates.get(oid, {oid}))
+                for node in pred:
+                    predicates[node] = pred
+            elif not re.match(ignore, p):
+                if sid not in predicates:
+                    predicates[sid] = {sid}
+                roles[sid].append((p, oid))
+
+        def output(pid, pred, nid):
+            result = nodes[nid].__dict__.copy()
+            result.update({'predicate': pred, 'predicate_id': pid})
+            return result
+
+        for pnodes in set(map(tuple, predicates.values())):
+            pid = sorted(pnodes)[0]
+            for node in pnodes:
+                yield output(pid, 'pred', node)
+                for p, oid in roles[node]:
+                    #for n2 in r['object_nodes']:
+                    for n2 in self.get_descendants(oid, triples):
+                        yield output(pid, p, n2)
+
+
     def get_graphviz(self, triple_hook=graphviz_triple_hook,
                      node_hook=graphviz_node_hook,
                      theme_options=VIS_THEME_OPTIONS, **hook_options):
