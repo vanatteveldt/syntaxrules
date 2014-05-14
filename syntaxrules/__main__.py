@@ -1,9 +1,7 @@
 """
 Apply transformation rules to a syntax (dependency) graph.
 
-A Sparql server should be listening at http://localhost:3030/x
-
-See: http://github.com/vanatteveldt/syntaxrules
+Jena should be available in a location pointed to by JENA_HOME
 
 Examples:
 (For testing, feel free to use syntaxrules/rulesets/sources_nl.json as rules

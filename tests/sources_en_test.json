@@ -1,0 +1,156 @@
+{
+  "header": {
+    "format-version": "0.0", 
+    "processed": [
+      {
+        "started": "2014-05-14T11:50:03.656742", 
+        "module-version": "3.3.1", 
+        "module": "corenlp"
+      }, 
+      {
+        "started": "2014-05-14T11:50:03.728545", 
+        "module-version": "3.0a4", 
+        "module": "semafor"
+      }
+    ], 
+    "format": "SAF"
+  }, 
+  "trees": [
+    {
+      "tree": "(ROOT (S (NP (NNP John)) (VP (VBD said) (SBAR (S (NP (PRP it)) (VP (MD would) (VP (VB be) (ADJP (JJ great)))))))))", 
+      "sentence": 1
+    }
+  ], 
+  "tokens": [
+    {
+      "word": "John", 
+      "sentence": 1, 
+      "pos": "NNP", 
+      "lemma": "John", 
+      "offset": "0", 
+      "id": 1, 
+      "pos1": "M"
+    }, 
+    {
+      "word": "said", 
+      "sentence": 1, 
+      "pos": "VBD", 
+      "lemma": "say", 
+      "offset": "5", 
+      "id": 2, 
+      "pos1": "V"
+    }, 
+    {
+      "word": "it", 
+      "sentence": 1, 
+      "pos": "PRP", 
+      "lemma": "it", 
+      "offset": "10", 
+      "id": 3, 
+      "pos1": "O"
+    }, 
+    {
+      "word": "would", 
+      "sentence": 1, 
+      "pos": "MD", 
+      "lemma": "would", 
+      "offset": "13", 
+      "id": 4, 
+      "pos1": "V"
+    }, 
+    {
+      "word": "be", 
+      "sentence": 1, 
+      "pos": "VB", 
+      "lemma": "be", 
+      "offset": "19", 
+      "id": 5, 
+      "pos1": "V"
+    }, 
+    {
+      "word": "great", 
+      "sentence": 1, 
+      "pos": "JJ", 
+      "lemma": "great", 
+      "offset": "22", 
+      "id": 6, 
+      "pos1": "A"
+    }
+  ], 
+  "entities": [
+    {
+      "tokens": [
+        1
+      ], 
+      "type": "PERSON"
+    }
+  ], 
+  "dependencies": [
+    {
+      "relation": "nsubj", 
+      "parent": 2, 
+      "child": 1
+    }, 
+    {
+      "relation": "nsubj", 
+      "parent": 6, 
+      "child": 3
+    }, 
+    {
+      "relation": "aux", 
+      "parent": 6, 
+      "child": 4
+    }, 
+    {
+      "relation": "cop", 
+      "parent": 6, 
+      "child": 5
+    }, 
+    {
+      "relation": "ccomp", 
+      "parent": 2, 
+      "child": 6
+    }
+  ], 
+  "frames": [
+    {
+      "sentence": 1, 
+      "elements": [
+        {
+          "name": "Message", 
+          "target": [
+            3, 
+            4, 
+            5, 
+            6
+          ]
+        }, 
+        {
+          "name": "Speaker", 
+          "target": [
+            1
+          ]
+        }
+      ], 
+      "target": [
+        2
+      ], 
+      "name": "Statement"
+    }, 
+    {
+      "sentence": 1, 
+      "elements": [
+        {
+          "name": "Evaluee", 
+          "target": [
+            3
+          ]
+        }
+      ], 
+      "target": [
+        6
+      ], 
+      "name": "Desirability"
+    }
+  ]
+}

@@ -278,12 +278,34 @@ class SyntaxTree(object):
                    }
 
 
-    def get_roles(self, ignore="^(rel_|frame_)"):
-        triples = list(self.get_triples())
+    def get_structs(self, ignore="^(rel_|frame_)"):
+        """
+        Return the predicate-argument structures contained in the tree.
+        A role is basically a predicate and a number of arguments such as subject of source.
+        Predicates are formed by all nodes from which relations originate.
+        If the predicate nodes are joined by 'pred' relations, they are iteratively combined
+        into a single predicate.
 
+        Example: Consider the sentence "Fantastic, according to John".
+        This could yield a tree with the following relations:
+        - According :quote fantastic ('according' is the quote of 'fantastic')
+        - To :pred according ('to' and 'according' are in the same predicate)
+        - To :source John (John is the source of 'to')
+        This results in a single struct:
+        [{"predicate": [according, to], "source": [John], "quote": [fantastic]}]
+        (where the nodes are references to the node objects.
+
+        Technically, all nodes that are the origin of a relation are predicates.
+        All predicates joined by 'pred' relations are combined into a single predicate.
+        For each (combined) predicate a struct is formed with the nodes of the predicate,
+        plus all nodes in roles originating from that predicate.
+        For the roles, all descendant nodes of the node pointed to are given until a node
+        is found that has a relation in another role.
+        """
+        triples = list(self.get_triples())
+        # get nodes per predicate and roles per nodes
         predicates = {} # node : predicate (set of nodes)
         roles = defaultdict(list) # subject_node : [rel]
-        rels = list(self.get_relations())
         nodes = {} # id : node
         for s,p,o in triples:
             sid, oid = int(s.id), int(o.id)
@@ -298,20 +320,16 @@ class SyntaxTree(object):
                 if sid not in predicates:
                     predicates[sid] = {sid}
                 roles[sid].append((p, oid))
-
-        def output(pid, pred, nid):
-            result = nodes[nid].__dict__.copy()
-            result.update({'predicate': pred, 'predicate_id': pid})
-            return result
-
+        # output a dict per predicate with nodes per role
         for pnodes in set(map(tuple, predicates.values())):
             pid = sorted(pnodes)[0]
+            result = defaultdict(list)  # list of nodes per role
             for node in pnodes:
-                yield output(pid, 'pred', node)
+                result['predicate'].append(nodes[node])
                 for p, oid in roles[node]:
-                    #for n2 in r['object_nodes']:
-                    for n2 in self.get_descendants(oid, triples, ignore=ignore):
-                        yield output(pid, p, n2)
+                    node_ids = self.get_descendants(oid, triples, ignore=ignore)
+                    result[p] += [nodes[n] for n in node_ids]
+            yield dict(result.iteritems())  # convert to regular dict
 
 
     def get_graphviz(self, triple_hook=graphviz_triple_hook,
@@ -354,6 +372,20 @@ class SyntaxTree(object):
             for k, v in attrs.iteritems():
                 getattr(g, "%s_attr" % obj)[k] = v
         return g
+
+
+def get_struct_tokens(structs):
+    """
+    Return a list the nodes contained in each struct.
+    Each node is a dict with the node properties and a (locally) unique
+    struct id and the role played by each node (predicate, source, etc)
+    """
+    for id, struct in enumerate(structs):
+        for role, nodes in struct.iteritems():
+            for node in nodes:
+                node = node.__dict__.copy()
+                node.update({'struct_id': id, 'role': role})
+                yield node
 
 
 def _saf_to_rdf(saf_article, sentence_id=None):
