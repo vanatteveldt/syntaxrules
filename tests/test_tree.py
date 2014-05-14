@@ -2,8 +2,9 @@ import tempfile
 
 from nose.tools import assert_equal, assert_false, assert_in
 
-from syntaxrules.syntaxtree import VIS_GREY_REL, NS_AMCAT
-from tools import _check_soh, _get_tree, _get_test_file
+from syntaxrules.syntaxtree import SyntaxTree, NS_AMCAT
+#from syntaxrules.syntaxtree import VIS_GREY_REL,
+from tools import _check_jena, _get_test_file
 
 TEST_SAF = _get_test_file("test_saf.json")
 TEST_RULES = _get_test_file("test_rules.json")
@@ -44,7 +45,8 @@ def test_saf_to_rdf():
 
 
 def test_load():
-    t = _get_tree(TEST_SAF, sid=2)
+    _check_jena()
+    t = SyntaxTree(TEST_SAF, sentence_id=2)
     triples = list(t.get_triples())
     assert_equal(len(triples), 1)
     assert_equal(triples[0].predicate, 'rel_nsubj')
@@ -53,20 +55,22 @@ def test_load():
 
 
 def test_lexicon():
-    t = _get_tree(TEST_SAF)
+    _check_jena()
+    t = SyntaxTree(TEST_SAF, sentence_id=1)
     t.apply_lexicon(TEST_RULES['lexicon'])
 
-    classes = {k.replace(NS_AMCAT, ":"): str(v.get('lexclass'))
+    classes = {k.replace(NS_AMCAT, ":"): v.get('lexclass')
                for (k, v) in t.get_tokens().iteritems()}
-    assert_equal(classes, {":t_2_marry": "marry",
-                           ":t_3_Mary": 'person',
-                           ':t_1_John': 'person',
-                           ':t_4_little': 'None',
+    assert_equal(classes, {":t_2_marry": ["marry"],
+                           ":t_3_Mary": ['person'],
+                           ':t_1_John': ['person'],
+                           ':t_4_little': None,
                        })
 
 
 def test_rules():
-    t = _get_tree(TEST_SAF)
+    _check_jena()
+    t = SyntaxTree(TEST_SAF, sentence_id=1)
     t.apply_ruleset(TEST_RULES)
     triples = [tr for tr in t.get_triples() if tr.predicate == "marry"]
 
@@ -74,9 +78,25 @@ def test_rules():
     assert_equal(triples[0].subject.lemma, 'John')
     assert_equal(triples[0].object.lemma, 'Mary')
 
+def test_rules_multiple():
+    """Can we apply rules to multiple sentences at once"""
+    _check_jena()
+    triples_single = set()
+    for sid in {t['sentence'] for t in TEST_SAF['tokens']}:
+        t = SyntaxTree(TEST_SAF, sentence_id=sid)
+        t.apply_ruleset(TEST_RULES)
+        triples_single |= set((s.id, p, o.id) for (s,p,o) in t.get_triples())
+
+    t = SyntaxTree(TEST_SAF)
+    t.apply_ruleset(TEST_RULES)
+    triples_all = set((s.id, p, o.id) for (s,p,o) in t.get_triples())
+
+    assert_equal(triples_single, triples_all)
+    
 
 def test_graph():
-    t = _get_tree(TEST_SAF)
+    _check_jena()
+    t = SyntaxTree(TEST_SAF, sentence_id=1)
     g = t.get_graphviz()
     assert_equal(set(g.edges()), {(u't_3_Mary', u't_2_marry'),
                                   (u't_1_John', u't_2_marry'),
@@ -87,14 +107,14 @@ def test_graph():
     # Can we 'gray out' syntax relations after applying rules
     t.apply_ruleset(TEST_RULES)
     t.apply_lexicon([{"lexclass": "man", "lemma": "john"}])
-    g = t.get_graphviz(triple_args_function=VIS_GREY_REL)
+    g = t.get_graphviz()#triple_args_function=VIS_GREY_REL)
     assert_equal(set(g.edges()), {(u't_3_Mary', u't_2_marry'),
                                   (u't_1_John', u't_2_marry'),
                                   (u't_4_little', u't_1_John'),
                                   (u't_1_John', u't_3_Mary')})
-    assert_false(g.get_edge(u't_1_John', u't_3_Mary').attr.get("color"))
-    assert_equal(g.get_edge(u't_1_John', u't_2_marry').attr.get("color"),
-                 "grey")
+    #assert_false(g.get_edge(u't_1_John', u't_3_Mary').attr.get("color"))
+    #assert_equal(g.get_edge(u't_1_John', u't_2_marry').attr.get("color"),
+    #"grey")
 
     # can we draw it? can't check output, but we can check for errors
     with tempfile.NamedTemporaryFile() as f:
@@ -102,7 +122,8 @@ def test_graph():
         g.draw("/tmp/test.png", prog="dot")
 
 def test_get_triples():
-    t = _get_tree(TEST_SAF)
+    _check_jena()
+    t = SyntaxTree(TEST_SAF, sentence_id=1)
     t.apply_ruleset(TEST_RULES)
     rels = list(t.get_relations())
     marry = dict(predicate='marry', object=3, object_nodes=[3],

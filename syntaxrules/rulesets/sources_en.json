@@ -1,0 +1,149 @@
+{
+    "rules": [
+        {
+            "label": "write off is not writing!",
+            "remove": "?write :frame \"Statement\".",
+            "condition": "?write :frame \"Statement\".\r\n?write :lemma \"write\".\r\n?off :lemma \"off\".\r\n?off :rel_prt ?write.",
+            "order": 0
+        },
+        {
+            "insert": "?x :is_quote \"1\".\r\n?x :source ?speaker.\r\n?x :quote ?message",
+            "order": 1,
+            "condition": "?x :frame \"Statement\".\r\nOPTIONAL {?x :frame_speaker ?speaker}\r\nOPTIONAL {?x :frame_message ?message}",
+            "label": "frame: Statement"
+        },
+        {
+            "insert": "?x :is_quote \"1\".\r\n?x :source ?speaker.\r\n?x :quote ?prop.",
+            "order": 2,
+            "condition": "?x :frame \"Attributed_information\"\r\nOPTIONAL {?x :frame_proposition ?prop}\r\nOPTIONAL {?x :frame_speaker ?speaker}",
+            "label": "frame: attributed"
+        },
+        {
+            "insert": "?x :is_quote \"1\".\r\n?x :quote ?dep",
+            "order": 5,
+            "condition": "?x :lemma \"argue\".\r\nOPTIONAL {?dep :rel_dep ?x}",
+            "label": "argues"
+        },
+        {
+            "label": "nsubj is never quote",
+            "remove": "?x :quote ?subj",
+            "condition": "?subj :rel_nsubj ?x.\r\n?x :quote ?subj",
+            "order": 10
+        },
+        {
+            "label": "nsubj of quote is never source",
+            "remove": "?x :source ?subj",
+            "condition": "?subj :rel_nsubj/:rel_ccomp ?x.\r\n?x :source ?subj",
+            "order": 11
+        },
+        {
+            "insert": "?to :quote ?quote.\r\n?to :source ?source.\r\n",
+            "remove": "?to :quote ?source",
+            "label": "correct according to",
+            "remarks": "corenlp/semafor does weird things with accoriding to, so we override if we see the pattern /projects/449/articlesets/10224/79243390/rulesets/7/?sid=13  projects/449/articlesets/10224/79243390/rulesets/7/?sid=10  projects/449/articlesets/10224/79240423/rulesets/7/?sid=11",
+            "order": 19,
+            "condition": "?to :rel_prepc_according_to ?quote.\r\n?source :rel_pobj ?quote.\r\nOPTIONAL {?to :quote ?source}"
+        },
+        {
+            "insert": "?acc :x \"XXXX\".\r\n?acc :quote ?quote.\r\n?acc :source ?source.",
+            "remove": "?to :quote ?quote.\r\n?to :source ?source.\r\n?acc :quote ?aquote.\r\n?acc :source ?asource.",
+            "label": "correct according to",
+            "remarks": "in \"according to\", the relation is placed on the \"to\" in corenlp and according is moved to the dependency. Let's move it back!",
+            "order": 20,
+            "condition": "?to :lemma \"to\".\r\n?to :quote ?quote.\r\n?to :source ?source.\r\n?to :frame_proposition ?prop.\r\n?acc :lemma \"accord\".\r\n?acc :frame_proposition ?prop.\r\nFILTER NOT EXISTS {?acc :rel []}\r\nFILTER NOT EXISTS {[] :rel ?acc}\r\nOPTIONAL {?acc :quote ?aquote.}\r\nOPTIONAL {?acc :source ?asource.}\r\n\r\n"
+        },
+        {
+            "insert": "?x :source ?subj",
+            "order": 21,
+            "condition": "?x :is_quote \"1\".\r\n?subj :rel_nsubj ?x.\r\nFILTER NOT EXISTS { \r\n  ?x :source [] \r\n}",
+            "label": "subject as source"
+        },
+        {
+            "insert": "?according :source ?src.",
+            "remove": "?to :quote ?toquote.\r\n?to :source ?tosource.",
+            "label": "more according to",
+            "remarks": "but sometimes, corenlp leaves the according in there (probably because of the but - projects/449/articlesets/10224/79243390/rulesets/7/?sid=10)",
+            "order": 21,
+            "condition": "?according :lemma \"accord\".\r\n?to :lemma \"to\".\r\n?to :rel_pcomp ?according.\r\n?src :rel_pobj ?to.\r\nOPTIONAL {?to :quote ?toquote.}\r\nOPTIONAL {?to :source ?tosource.}"
+        },
+        {
+            "remarks": "no frame found, so we do it ourselves projects/449/articlesets/10224/79240423/rulesets/7/?sid=18",
+            "insert": "?show :source ?survey.\r\n?show :is_quote \"1\"",
+            "order": 22,
+            "condition": "?survey :lexclass \"report\".\r\n?show :lexclass \"tell\".\r\n?survey :rel_nsubj ?show.\r\nFILTER NOT EXISTS {?show :is_quote [] }\r\nFILTER NOT EXISTS {?show :quote [] }\r\nFILTER NOT EXISTS {?show :source [] }\r\nFILTER NOT EXISTS {[] :source ?survey}",
+            "label": "a survey shows"
+        },
+        {
+            "insert": "?x :source ?obj",
+            "order": 25,
+            "condition": "?x :is_quote \"1\".\r\n?obj :rel_dobj ?x.\r\nFILTER NOT EXISTS { \r\n  ?x :source [] \r\n}",
+            "label": "dobj as source if no subj"
+        },
+        {
+            "insert": "?tell :quote ?ccomp.",
+            "remove": "?tell :quote ?dobj.",
+            "label": "to tell someone something",
+            "remarks": "semafor places the quote on the dobj sometimes, which is wrong (or maybe the parse is wrong... hmmm))  \r\nrojects/449/articlesets/10224/79243390/rulesets/7/?sid=27",
+            "order": 26,
+            "condition": "?tell :lexclass \"tell\".\r\n?tell :quote ?dobj.\r\n?dobj :rel_dobj ?tell.\r\n?comp ?rel_ccomp ?tell."
+        },
+        {
+            "insert": "?x :quote ?obj",
+            "order": 30,
+            "condition": "?x :is_quote \"1\".\r\n?obj :rel_ccomp|:rel_parataxis|^:rel_parataxis|^:rel_appos ?x.\r\nFILTER NOT EXISTS { \r\n  ?x :quote [] \r\n}",
+            "label": "ccomp/paraquote"
+        },
+        {
+            "insert": "?x :quote ?obj",
+            "order": 31,
+            "condition": "?x :is_quote \"1\".\r\n?obj :rel_dobj|:rel_vmod ?x.\r\nFILTER NOT EXISTS {?x :quote [] }\r\nFILTER NOT EXISTS {?x :source ?obj }",
+            "label": "dobj as quote if source"
+        },
+        {
+            "remarks": "someone's report, even if the report has a source (is that wise? - projects/449/articlesets/10224/79243667/rulesets/7/?sid=1)",
+            "insert": "?x :source ?src",
+            "order": 32,
+            "condition": "?x :is_quote \"1\".\r\n?src :rel_poss ?x",
+            "label": "possessive with source"
+        },
+        {
+            "remarks": "appos can go on a lower child, so need to work up ",
+            "insert": "?x :quote ?q",
+            "order": 35,
+            "condition": "?x :is_quote \"1\".\r\n?x :rel_appos/:rel* ?q\r\nFILTER NOT EXISTS {?q :rel []}",
+            "label": "appos quote"
+        },
+        {
+            "remarks": "dep part of quote, even if it already has a quote (is that wise? avigator/projects/449/articlesets/10224/79244892/rulesets/7/?sid=4",
+            "insert": "?x :quote ?dep",
+            "order": 36,
+            "condition": "?x :is_quote \"1\".\r\n?dep :rel_dep ?x.",
+            "label": "quote with dep"
+        },
+        {
+            "insert": "?x :quote ?z",
+            "remove": "?x :quote ?y",
+            "label": "migrate quote up conjunction",
+            "remarks": "if the quote is part of a conjunction, the quote is the whole conjunction, so choose the highest (which is arbitrary in corenlp? projects/449/articlesets/10224/79243390/rulesets/7/?sid=10)",
+            "order": 40,
+            "condition": "?x :quote ?y.\r\n?y :rel_conj_but ?z."
+        }
+    ],
+    "lexicon": [
+        {
+            "lexclass": "report",
+            "lemma": [
+                "report",
+                "survey"
+            ]
+        },
+        {
+            "lexclass": "tell",
+            "lemma": [
+                "tell",
+                "show"
+            ]
+        }
+    ],
+    "preprocessing": "semafor"
+}

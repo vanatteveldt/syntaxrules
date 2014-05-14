@@ -1,19 +1,24 @@
-# create SyntaxTree object
 from syntaxrules import SyntaxTree
-t = SyntaxTree("http://localhost:3030/x")
-
-# Load sentence from the unit tests
 import requests
+import json
+
+# create SyntaxTree object based on sentences from the unitt tests
 saf_url = "https://raw.github.com/vanatteveldt/syntaxrules/master/tests/test_saf.json"
-saf = requests.get(saf_url).json()
-t.load_saf(saf, sentence_id=1)
+saf = open("/home/wva/syntaxrules/tests/test_saf.json")
+#saf = requests.get(saf_url).json()
+t = SyntaxTree(saf, sentence_id=1)
+
 # Visualize to /tmp/test.png
-t.get_graphviz().draw("/tmp/test.png", prog="dot")
+#t.get_graphviz().draw("/tmp/test.png", prog="dot")
 
 # apply rules
 ruleset_url = "https://raw.github.com/vanatteveldt/syntaxrules/master/tests/test_rules.json"
-ruleset = requests.get(ruleset_url).json()
+#ruleset = requests.get(ruleset_url).json()
+ruleset = json.load(open("/home/wva/syntaxrules/tests/test_rules.json"))
 t.apply_ruleset(ruleset)
+t.get_graphviz().draw("/tmp/test.png", prog="dot")
+import sys; sys.exit()
+
 
 # get newly created triples
 triples = t.get_triples(ignore_grammatical=True)

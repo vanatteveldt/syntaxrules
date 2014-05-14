@@ -1,9 +1,7 @@
 """
 Apply transformation rules to a syntax (dependency) graph.
 
-A Sparql server should be listening at http://localhost:3030/x
-
-See: http://github.com/vanatteveldt/syntaxrules
+Jena should be available in a location pointed to by JENA_HOME
 
 Examples:
 (For testing, feel free to use syntaxrules/rulesets/sources_nl.json as rules
@@ -57,9 +55,7 @@ outfile = (sys.stdout if args.output is None
            else open(args.output, "w"))
 
 # get the syntax tree
-soh = syntaxrules.SOHServer(url="http://localhost:3030/x")
-t = syntaxrules.SyntaxTree(soh)
-t.load_saf(saf, sentence_id=args.sentence)
+t = syntaxrules.SyntaxTree(saf, sentence_id=args.sentence)
 
 # apply the rules
 if args.ruleset != '-':

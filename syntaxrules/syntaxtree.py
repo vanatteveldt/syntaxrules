@@ -31,7 +31,7 @@ from unidecode import unidecode
 from rdflib import ConjunctiveGraph, Namespace, Literal
 from pygraphviz import AGraph
 
-from .soh import SOHServer
+import sparqlrunner
 
 log = logging.getLogger(__name__)
 
@@ -85,49 +85,22 @@ def graphviz_triple_hook(triple, grey_rel=False, **_):
 
 class SyntaxTree(object):
 
-    def __init__(self, soh):
+    def __init__(self, saf_article, sentence_id=None):
         """
-        @param soh: a SOH server (see amcat.tools.pysoh)
-        """
-        if isinstance(soh, (str, unicode)):
-            # it's probably a URL
-            soh = SOHServer(soh)
-        self.soh = soh
-        self.soh.prefixes[""] = AMCAT
-
-
-    def load_saf(self, saf_article, sentence_id):
-        """
-        Load triples from a SAF article
+        Construct a SyntaxTree object from a SAF article
         (see https://gist.github.com/vanatteveldt/9027118)
         @param saf_article: a dict, url, or file
         """
         if isinstance(saf_article, file):
-            saf_article = json.load(file)
+            saf_article = json.load(saf_article)
         elif isinstance(saf_article, (str, unicode)):
             saf_article = requests.get(saf_article).json()
-        triples = _saf_to_rdf(saf_article, sentence_id)
-        self._load_coreferences(saf_article)
-        self._load_sentence(triples)
+        self.saf_article = saf_article
+        self.graph = ConjunctiveGraph()
+        self.graph.bind("amcat", AMCAT)
+        for triple in _saf_to_rdf(saf_article, sentence_id):
+            self.graph.add(triple)
 
-    def _load_sentence(self, rdf_triples):
-        """Load the given triples into the triple store"""
-        g = ConjunctiveGraph()
-        g.bind("amcat", AMCAT)
-        for triple in rdf_triples:
-            g.add(triple)
-        self.soh.add_triples(g, clear=True)
-
-    def _load_coreferences(self, saf_article):
-        """Store the coreference groups as {node: coreferencing_nodes}"""
-        coref_groups = []
-        for a, b in saf_article.get('coreferences', []):
-            # take only the heads of each coref group
-            coref_groups.append([a[0], b[0]])
-        self.coreference_groups = {}
-        for nodes in merge(coref_groups):
-            for node in nodes:
-                self.coreference_groups[node] = nodes
 
     def get_triples(self, ignore_rel=True, filter_predicate=None,
                     ignore_grammatical=False, minimal=False):
@@ -136,7 +109,7 @@ class SyntaxTree(object):
         if isinstance(filter_predicate, (str, unicode)):
             filter_predicate = [filter_predicate]
         nodes = {}
-        for s, p, o in self.soh.get_triples():
+        for s, p, o in self.graph:
             s = unicode(s)
             child = nodes.setdefault(s, Node(uri=s))
 
@@ -159,48 +132,73 @@ class SyntaxTree(object):
                     for (s, p, o) in result]
         return result
 
+    def apply_updates(self, updates):
+        def update_sparql(condition="", insert="", remove="", **_):
+            return u"""PREFIX : <{AMCAT}>
+                       DELETE {{ {remove} }}
+                       INSERT {{ {insert} }}
+                       WHERE {{ {condition} }}""".format(AMCAT=AMCAT, **locals())
+        updates = [update_sparql(**u) for u in updates]
+        self.graph = sparqlrunner.run(self.graph, updates)
 
     def apply_ruleset(self, ruleset):
         """
         Apply a set of rules to this tree.
         A ruleset should be a dict with rules and lexicon entries
         """
-        self.apply_lexicon(ruleset['lexicon'])
-        for rule in ruleset['rules']:
-            self.apply_rule(rule)
+        updates = [self._get_lexicon_update(ruleset['lexicon'])]
+        updates += ruleset['rules']
+        self.apply_updates(updates)
 
     def apply_rule(self, rule):
-        """
-        Apply the given rule, which should be a dict with
-        condition and insert and/or delete clauses
-        """
-        self.soh.update(where=rule['condition'],
-                        insert=rule.get('insert', ''),
-                        delete=rule.get('remove', ''))
-
-    def get_tokens(self):
-        tokens = defaultdict(dict)  # id : {attrs}
-        for s, p, o in self.soh.get_triples():
-            if isinstance(o, Literal):
-                attr = p.replace(NS_AMCAT, "")
-                if attr == "lexclass":
-                    tokens[s][attr] = tokens[s].get(attr, []) + [unicode(o)]
-                else:
-                    tokens[s][attr] = unicode(o)
-        return tokens
-
+        self.apply_updates([rule])
     def apply_lexicon(self, lexicon):
+        updates = [self._get_lexicon_update(lexicon)]
+        self.apply_updates(updates)
+
+    def _get_lexicon_update(self, lexicon):
         """
         Lexicon should consist of dicts with lexclass, lemma, and optional pos
         lemma can be a list or a string
         """
+
+        def merge(lists):
+            """
+            Merge the lists so lists with overlap are joined together
+            (i.e. [[1,2], [3,4], [2,5]] --> [[1,2,5], [3,4]])
+            from: http://stackoverflow.com/a/9400562
+            """
+            newsets, sets = [set(lst) for lst in lists if lst], []
+            while len(sets) != len(newsets):
+                sets, newsets = newsets, []
+                for aset in sets:
+                    for eachset in newsets:
+                        if not aset.isdisjoint(eachset):
+                            eachset.update(aset)
+                            break
+                    else:
+                        newsets.append(aset)
+            return newsets
+
+        def get_coreferences(coreferences):
+            """Decode the SAF coreferences as (node: coreferencing_nodes) pairs"""
+            coref_groups = []
+            for a, b in coreferences:
+                # take only the heads of each coref group
+                coref_groups.append([a[0], b[0]])
+            for nodes in merge(coref_groups):
+                for node in nodes:
+                    yield node, nodes
+
+        coreferences = dict(get_coreferences(self.saf_article.get('coreferences', [])))
+
         classes = defaultdict(set) #  token -> classes
         uris = {}
         for uri, token in self.get_tokens().iteritems():
             if 'pos' not in token: continue # not a word
             uris[int(token['id'])] = uri
             pos = token['pos']
-            lemma = token['lemma'].lower()
+            lemma = token['lemma']
             for lex in lexicon:
                 if "pos" in lex and lex['pos'] != pos:
                     continue
@@ -209,22 +207,34 @@ class SyntaxTree(object):
                 if not isinstance(lemmata, list):
                     lemmata = [lemmata]
                 for target in lemmata:
-                    if target == lemma or (target.endswith("*")
-                                           and lemma.startswith(target[:-1])):
+                    if (target == lemma or target == lemma.lower()
+                        or (target.endswith("*") and lemma.lower().startswith(target[:-1]))):
                         id = int(token['id'])
-                        for id in self.coreference_groups.get(id, [id]):
-                            classes[id].add(lexclass)
+                        for coref in coreferences.get(id, [id]):
+                            classes[coref].add(lexclass)
         inserts = []
         for id, lexclasses in classes.iteritems():
             if id not in uris:
                 continue #  coref to different sentence
             uri = str(uris[id]).replace(AMCAT, ":")
-            inserts += ['{uri} :lexclass "{lexclass}"'.format(**locals())
-                       for lexclass in lexclasses]
-        insert = ". ".join(inserts)
-        self.soh.update(insert=insert)
+            for lexclass in lexclasses:
+                inserts.append('{uri} :lexclass "{lexclass}"'.format(**locals()))
+        return {"insert": ".\n".join(inserts)}
 
-    def get_descendants(self, node, triples):
+
+    def get_tokens(self):
+        tokens = defaultdict(dict)  # id : {attrs}
+        for s, p, o in self.graph:
+            if isinstance(o, Literal):
+                attr = p.replace(NS_AMCAT, "")
+                if attr == "lexclass":
+                    tokens[s][attr] = tokens[s].get(attr, []) + [unicode(o)]
+                else:
+                    tokens[s][attr] = unicode(o)
+        return tokens
+
+
+    def get_descendants(self, node, triples, ignore="^(rel_|frame_)"):
         """
         Get all decendants of node according to rel_ triples,
         but blocks on any node in a non-rel_ triple
@@ -235,7 +245,7 @@ class SyntaxTree(object):
             s, o = int(s.id), int(o.id)
             if p.startswith("rel_"):
                 children[o].append(s)
-            else:
+            elif not re.match(ignore, p):
                 inrelation |= {s, o}
         seen = set()
         def getnodes(n):
@@ -266,6 +276,61 @@ class SyntaxTree(object):
                        "object": o,
                        "object_nodes": list(self.get_descendants(o, triples)),
                    }
+
+
+    def get_structs(self, ignore="^(rel_|frame_)"):
+        """
+        Return the predicate-argument structures contained in the tree.
+        A role is basically a predicate and a number of arguments such as subject of source.
+        Predicates are formed by all nodes from which relations originate.
+        If the predicate nodes are joined by 'pred' relations, they are iteratively combined
+        into a single predicate.
+
+        Example: Consider the sentence "Fantastic, according to John".
+        This could yield a tree with the following relations:
+        - According :quote fantastic ('according' is the quote of 'fantastic')
+        - To :pred according ('to' and 'according' are in the same predicate)
+        - To :source John (John is the source of 'to')
+        This results in a single struct:
+        [{"predicate": [according, to], "source": [John], "quote": [fantastic]}]
+        (where the nodes are references to the node objects.
+
+        Technically, all nodes that are the origin of a relation are predicates.
+        All predicates joined by 'pred' relations are combined into a single predicate.
+        For each (combined) predicate a struct is formed with the nodes of the predicate,
+        plus all nodes in roles originating from that predicate.
+        For the roles, all descendant nodes of the node pointed to are given until a node
+        is found that has a relation in another role.
+        """
+        triples = list(self.get_triples())
+        # get nodes per predicate and roles per nodes
+        predicates = {} # node : predicate (set of nodes)
+        roles = defaultdict(list) # subject_node : [rel]
+        nodes = {} # id : node
+        for s,p,o in triples:
+            sid, oid = int(s.id), int(o.id)
+            nodes[sid] = s
+            nodes[oid] = o
+            if p == "pred":
+                pred =(predicates.get(sid, {sid}) |
+                       predicates.get(oid, {oid}))
+                for node in pred:
+                    predicates[node] = pred
+            elif not re.match(ignore, p):
+                if sid not in predicates:
+                    predicates[sid] = {sid}
+                roles[sid].append((p, oid))
+        # output a dict per predicate with nodes per role
+        for pnodes in set(map(tuple, predicates.values())):
+            pid = sorted(pnodes)[0]
+            result = defaultdict(list)  # list of nodes per role
+            for node in pnodes:
+                result['predicate'].append(nodes[node])
+                for p, oid in roles[node]:
+                    node_ids = self.get_descendants(oid, triples, ignore=ignore)
+                    result[p] += [nodes[n] for n in node_ids]
+            yield dict(result.iteritems())  # convert to regular dict
+
 
     def get_graphviz(self, triple_hook=graphviz_triple_hook,
                      node_hook=graphviz_node_hook,
@@ -309,7 +374,21 @@ class SyntaxTree(object):
         return g
 
 
-def _saf_to_rdf(saf_article, sentence_id):
+def get_struct_tokens(structs):
+    """
+    Return a list the nodes contained in each struct.
+    Each node is a dict with the node properties and a (locally) unique
+    struct id and the role played by each node (predicate, source, etc)
+    """
+    for id, struct in enumerate(structs):
+        for role, nodes in struct.iteritems():
+            for node in nodes:
+                node = node.__dict__.copy()
+                node.update({'struct_id': id, 'role': role})
+                yield node
+
+
+def _saf_to_rdf(saf_article, sentence_id=None):
     """
     Get the raw RDF subject, predicate, object triples
     representing the given analysed sentence
@@ -326,7 +405,7 @@ def _saf_to_rdf(saf_article, sentence_id):
 
     tokens = {}  # token_id : uri
     for token in saf_article['tokens']:
-        if int(token['sentence']) == sentence_id:
+        if (sentence_id is None) or (int(token['sentence']) == sentence_id):
             uri = _token_uri(token)
             for k, v in token.iteritems():
                 yield uri, NS_AMCAT[k], Literal(unidecode(unicode(v)))
@@ -353,7 +432,8 @@ def _saf_to_rdf(saf_article, sentence_id):
 
     if 'frames' in saf_article:
         for i, f in enumerate(f for f in saf_article['frames']
-                              if int(f['sentence']) == sentence_id):
+                              if (sentence_id is None
+                                  or int(f['sentence']) == sentence_id)):
             for target in f["target"]:
                 yield tokens[target], NS_AMCAT["frame"], Literal(f["name"])
                 for e in f["elements"]:
@@ -371,22 +451,3 @@ def _saf_to_rdf(saf_article, sentence_id):
                     for term in targets:
                         if target != term: # drop frames pointing to self
                             yield tokens[target], rel_uri,  tokens[term]
-
-
-def merge(lists):
-    """
-    Merge the lists so lists with overlap are joined together
-    (i.e. [[1,2], [3,4], [2,5]] --> [[1,2,5], [3,4]])
-    from: http://stackoverflow.com/a/9400562
-    """
-    newsets, sets = [set(lst) for lst in lists if lst], []
-    while len(sets) != len(newsets):
-        sets, newsets = newsets, []
-        for aset in sets:
-            for eachset in newsets:
-                if not aset.isdisjoint(eachset):
-                    eachset.update(aset)
-                    break
-            else:
-                newsets.append(aset)
-    return newsets

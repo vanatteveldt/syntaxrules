@@ -58,7 +58,40 @@
             "lemma": "rain",
             "offset": "3",
             "id": 6
+        },
+        {
+            "word": "John",
+            "sentence": 3,
+            "pos": "NNP",
+            "lemma": "John",
+            "offset": "1",
+            "id": 11
+        },
+        {
+            "word": "married",
+            "sentence": 3,
+            "pos": "VBD",
+            "lemma": "marry",
+            "offset": "5",
+            "id": 12
+        },
+        {
+            "word": "Mary",
+            "sentence": 3,
+            "pos": "NNP",
+            "lemma": "Mary",
+            "offset": "13",
+            "id": 13
+        },
+        {
+            "word": "Little",
+            "sentence": 3,
+            "pos": "JJ",
+            "lemma": "little",
+            "offset": "0",
+            "id": 14
         }
+
     ],
     "dependencies": [
         {
@@ -80,6 +113,21 @@
             "relation": "nsubj",
             "parent": 6,
             "child": 5
+        },
+        {
+            "relation": "amod",
+            "parent": 11,
+            "child": 14
+        },
+        {
+            "relation": "nsubj",
+            "parent": 12,
+            "child": 11
+        },
+        {
+            "relation": "dobj",
+            "parent": 12,
+            "child": 13
         }
     ]
 }
