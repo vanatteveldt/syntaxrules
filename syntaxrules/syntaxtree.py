@@ -198,7 +198,7 @@ class SyntaxTree(object):
             if 'pos' not in token: continue # not a word
             uris[int(token['id'])] = uri
             pos = token['pos']
-            lemma = token['lemma'].lower()
+            lemma = token['lemma']
             for lex in lexicon:
                 if "pos" in lex and lex['pos'] != pos:
                     continue
@@ -207,11 +207,11 @@ class SyntaxTree(object):
                 if not isinstance(lemmata, list):
                     lemmata = [lemmata]
                 for target in lemmata:
-                    if target == lemma or (target.endswith("*")
-                                           and lemma.startswith(target[:-1])):
+                    if (target == lemma or target == lemma.lower()
+                        or (target.endswith("*") and lemma.lower().startswith(target[:-1]))):
                         id = int(token['id'])
-                        for id in coreferences.get(id, [id]):
-                            classes[id].add(lexclass)
+                        for coref in coreferences.get(id, [id]):
+                            classes[coref].add(lexclass)
         inserts = []
         for id, lexclasses in classes.iteritems():
             if id not in uris:
@@ -234,7 +234,7 @@ class SyntaxTree(object):
         return tokens
 
 
-    def get_descendants(self, node, triples):
+    def get_descendants(self, node, triples, ignore="^(rel_|frame_)"):
         """
         Get all decendants of node according to rel_ triples,
         but blocks on any node in a non-rel_ triple
@@ -245,7 +245,7 @@ class SyntaxTree(object):
             s, o = int(s.id), int(o.id)
             if p.startswith("rel_"):
                 children[o].append(s)
-            else:
+            elif not re.match(ignore, p):
                 inrelation |= {s, o}
         seen = set()
         def getnodes(n):
@@ -310,7 +310,7 @@ class SyntaxTree(object):
                 yield output(pid, 'pred', node)
                 for p, oid in roles[node]:
                     #for n2 in r['object_nodes']:
-                    for n2 in self.get_descendants(oid, triples):
+                    for n2 in self.get_descendants(oid, triples, ignore=ignore):
                         yield output(pid, p, n2)
 
 
