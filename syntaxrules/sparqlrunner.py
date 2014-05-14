@@ -1,6 +1,6 @@
 """
 Run a number of sparql update statements on a data source
-Uses the simple java script SparqlRunner.java to address JENA ARQ
+Uses the (simple) java script SparqlRunner.java to address JENA ARQ
 """
 import logging
 import os, os.path
@@ -19,8 +19,13 @@ def read_lines(source, target):
         target.append(line)
 
 class SparqlRunner(object):
+    """
+    Keeps a java process with sparqlrunner in a sub process.
+    Normally, use the singleton-based module-level run function rather
+    than instantiating this class directly
+    (unless you need e.g. multiple concurrent processes)
+    """
 
-    
     def __init__(self):
         self.start_sparqlrunner()
 
@@ -32,12 +37,12 @@ class SparqlRunner(object):
         cmd = "java -cp '{classpath}' SparqlRunner".format(**locals())
         self.p = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.communicate(input=None)
-        
+
     def communicate(self, input):
         if self.p.poll() is not None:
             logging.warn("SparqlRunner process died, respawning")
             self.start_sparqlrunner()
-            
+
         if input:
             self.p.stdin.write(input)
             self.p.stdin.write("\n\n")
@@ -57,8 +62,8 @@ class SparqlRunner(object):
                 break
         t.join()
         return "".join(out_lines)
-        
-        
+
+
     def run(self, data, updates, parse=True):
         if isinstance(data, Graph):
             data = data.serialize(format="turtle")
@@ -68,39 +73,14 @@ class SparqlRunner(object):
             out = Graph().parse(data=out, format='n3')
         return out
 
-        
-        
-_SINGLETON = None
-def _get_singleton():
-    global _SINGLETON
-    if _SINGLETON is None:
-        _SINGLETON = SparqlRunner()
-    return _SINGLETON
 
+_SINGLETON_LOCK = threading.Lock()
 def run(data, updates, parse=True):
     """
     Run the updates on the data and return the resulting triples
+    Uses a (thread-safe) singleton instance of SparqlRunner
     """
-    return _get_singleton().run(data, updates, parse=True)
-
-def test():
-    
-    r = SparqlRunner()
-
-    data = "@prefix vCard:   <http://www.w3.org/2001/vcard-rdf/3.0#> .\n@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n\n<http://somewhere/MattJones/>  vCard:FN   \"Matt Jones\" .\n<http://somewhere/MattJones/>  vCard:N    _:b0 .\n_:b0  vCard:Family \"Jones\" .\n_:b0  vCard:Given  \"Matthew\" .\n\n\n<http://somewhere/RebeccaSmith/> vCard:FN    \"Becky Smith\" .\n<http://somewhere/RebeccaSmith/> vCard:N     _:b1 .\n_:b1 vCard:Family \"Smith\" .\n_:b1 vCard:Given  \"Rebecca\" .\n\n<http://somewhere/JohnSmith/>    vCard:FN    \"John Smith\" .\n<http://somewhere/JohnSmith/>    vCard:N     _:b2 .\n_:b2 vCard:Family \"Smith\" .\n_:b2 vCard:Given  \"John\"  .\n\n<http://somewhere/SarahJones/>   vCard:FN    \"Sarah Jones\" .\n<http://somewhere/SarahJones/>   vCard:N     _:b3 .\n_:b3 vCard:Family  \"Jones\" .\n_:b3 vCard:Given   \"Sarah\" .\n\n"
-    updates = ["PREFIX vCard: <http://www.w3.org/2001/vcard-rdf/3.0#>\nINSERT { ?x vCard:FN  \"Wouter\" } WHERE {?x vCard:FN \"John Smith\"}"]
-
-    g = r.run(data, updates)
-    g = r.run(data, updates)
-    print g
-    updatesfout = ["PREFXIX vCard: <http://www.w3.org/2001/vcard-rdf/3.0#>\nINSERT { ?x vCard:FN  \"Wouter\" } WHERE {?x vCard:FN \"John Smith\"}"]
-    try:
-        g = r.run(data, updatesfout)
-    except Exception, e:
-        logging.exception("ERROR")
-    print "----------"
-    g = r.run(data, updates)
-
-
-if __name__ == '__main__':
-    test()
+    with _SINGLETON_LOCK:
+        if not hasattr(SparqlRunner, '_singleton'):
+            SparqlRunner._singleton = SparqlRunner()
+        return SparqlRunner._singleton.run(data, updates, parse=parse)
