@@ -40,7 +40,7 @@ NS_AMCAT = Namespace(AMCAT)
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 Triple = namedtuple("Triple", ["subject", "predicate", "object"])
 
-VIS_IGNORE_PROPERTIES = "id", "offset", "sentence", "uri", "word"
+VIS_IGNORE_PROPERTIES = ["id", "offset", "sentence", "uri", "word"]
 VIS_THEME_OPTIONS = {"graph" : {"rankdir" : "BT",
                                 "concentrate" : "false"},
                      "node" : {"shape" : "rect",
